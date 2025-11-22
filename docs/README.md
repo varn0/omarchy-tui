@@ -1,6 +1,6 @@
 # Omarchy TUI - Module Specifications
 
-Technical specifications for each module are located alongside their corresponding `.go` files in the project structure.
+This directory contains technical specifications for each module in the Omarchy TUI project.
 
 ## Project Structure
 
@@ -8,57 +8,48 @@ Technical specifications for each module are located alongside their correspondi
 omarchy/
 ├─ cmd/
 │  └─ omarchy/
-│     ├─ main.go
-│     └─ main.md
+│     └─ main.go
 ├─ internal/
 │  ├─ config/
 │  │  ├─ loader.go
-│  │  ├─ loader.md
-│  │  ├─ model.go
-│  │  └─ model.md
+│  │  └─ model.go
 │  ├─ tui/
 │  │  ├─ app.go
-│  │  ├─ app.md
 │  │  ├─ categories_view.go
-│  │  ├─ categories_view.md
 │  │  ├─ apps_view.go
-│  │  ├─ apps_view.md
 │  │  ├─ bottom_panel.go
-│  │  ├─ bottom_panel.md
-│  │  ├─ controller.go
-│  │  └─ controller.md
+│  │  └─ controller.go
 │  └─ exec/
-│     ├─ runner.go
-│     └─ runner.md
+│     └─ runner.go
 └─ go.mod
 ```
 
 ## Module Specifications
 
 ### Entry Point
-- **[cmd/omarchy/main.md](../cmd/omarchy/main.md)** - Application entry point (`cmd/omarchy/main.go`)
+- **[main.md](./main.md)** - Application entry point (`cmd/omarchy/main.go`)
   - Initializes application, loads configuration, starts TUI
 
 ### Configuration Module
-- **[internal/config/loader.md](../internal/config/loader.md)** - Configuration loader (`internal/config/loader.go`)
+- **[config-loader.md](./config-loader.md)** - Configuration loader (`internal/config/loader.go`)
   - Loads and parses YAML configuration file
-- **[internal/config/model.md](../internal/config/model.md)** - Data models (`internal/config/model.go`)
+- **[config-model.md](./config-model.md)** - Data models (`internal/config/model.go`)
   - Defines configuration data structures
 
 ### TUI Module
-- **[internal/tui/app.md](../internal/tui/app.md)** - Root TUI application (`internal/tui/app.go`)
+- **[tui-app.md](./tui-app.md)** - Root TUI application (`internal/tui/app.go`)
   - Creates root tview.Application and composes panels
-- **[internal/tui/categories_view.md](../internal/tui/categories_view.md)** - Categories view (`internal/tui/categories_view.go`)
+- **[tui-categories-view.md](./tui-categories-view.md)** - Categories view (`internal/tui/categories_view.go`)
   - Renders and handles category list selection
-- **[internal/tui/apps_view.md](../internal/tui/apps_view.md)** - Applications view (`internal/tui/apps_view.go`)
+- **[tui-apps-view.md](./tui-apps-view.md)** - Applications view (`internal/tui/apps_view.go`)
   - Renders and handles application list for selected category
-- **[internal/tui/bottom_panel.md](../internal/tui/bottom_panel.md)** - Bottom panel (`internal/tui/bottom_panel.go`)
+- **[tui-bottom-panel.md](./tui-bottom-panel.md)** - Bottom panel (`internal/tui/bottom_panel.go`)
   - Displays contextual information and configuration editor
-- **[internal/tui/controller.md](../internal/tui/controller.md)** - TUI controller (`internal/tui/controller.go`)
+- **[tui-controller.md](./tui-controller.md)** - TUI controller (`internal/tui/controller.go`)
   - Coordinates views, manages state, handles business logic
 
 ### Execution Module
-- **[internal/exec/runner.md](../internal/exec/runner.md)** - Application runner (`internal/exec/runner.go`)
+- **[exec-runner.md](./exec-runner.md)** - Application runner (`internal/exec/runner.go`)
   - Launches external system programs
 
 ## Specification Format
