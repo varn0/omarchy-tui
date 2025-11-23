@@ -3,6 +3,7 @@ package tui
 import (
 	"omarchy-tui/internal/config"
 	"omarchy-tui/internal/exec"
+	"omarchy-tui/internal/logger"
 )
 
 // EditMode represents the current editing mode
@@ -41,6 +42,7 @@ func (c *Controller) SetStateChangeCallback(fn func()) {
 
 // SelectCategory sets the selected category and clears app selection
 func (c *Controller) SelectCategory(categoryID string) {
+	logger.Log("Controller: Selecting category: %s", categoryID)
 	c.selectedCatID = categoryID
 	c.selectedApp = nil
 	c.editMode = EditModeNone
@@ -56,6 +58,9 @@ func (c *Controller) SetSelectedCategorySilent(categoryID string) {
 
 // SelectApp sets the selected application
 func (c *Controller) SelectApp(app *config.Application) {
+	if app != nil {
+		logger.Log("Controller: Selecting app: %s (package: %s)", app.Name, app.PackageName)
+	}
 	c.selectedApp = app
 	c.editMode = EditModeNone
 	c.notifyStateChange()
@@ -92,6 +97,7 @@ func (c *Controller) SetDefaultApp(categoryID string, app *config.Application) e
 	if app == nil {
 		return nil
 	}
+	logger.Log("Controller: Setting default app for category %s: %s", categoryID, app.Name)
 	c.defaultApps[categoryID] = app
 	c.notifyStateChange()
 	return nil
@@ -102,17 +108,20 @@ func (c *Controller) LaunchApp(app *config.Application) error {
 	if app == nil {
 		return nil
 	}
+	logger.Log("Controller: Launching app: %s (package: %s)", app.Name, app.PackageName)
 	return exec.LaunchApp(app.PackageName)
 }
 
 // EnterEditMode switches to the specified edit mode
 func (c *Controller) EnterEditMode(mode EditMode) {
+	logger.Log("Controller: Entering edit mode: %d", mode)
 	c.editMode = mode
 	c.notifyStateChange()
 }
 
 // CancelEdit cancels the current edit and returns to normal mode
 func (c *Controller) CancelEdit() {
+	logger.Log("Controller: Cancelling edit mode")
 	c.editMode = EditModeNone
 	c.notifyStateChange()
 }

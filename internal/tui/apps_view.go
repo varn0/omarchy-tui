@@ -3,7 +3,6 @@ package tui
 import (
 	"omarchy-tui/internal/config"
 
-	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -33,18 +32,8 @@ func NewAppsView(controller *Controller, app *tview.Application, root tview.Prim
 			av.showActionMenu(&av.apps[index])
 		}
 	})
-	// Set input capture to update selection when user navigates
-	av.list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// Let the list handle up/down arrows, then update selection
-		if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyDown {
-			// Return event to let list process it, then update selection
-			// We'll update after the list processes the key
-			av.app.QueueUpdate(func() {
-				av.UpdateSelection()
-			})
-		}
-		return event // Let the event pass through to the list
-	})
+	// Selection updates are handled through keyboard events in app.go's global handler
+	// to avoid recursion during programmatic list updates
 
 	return av
 }
