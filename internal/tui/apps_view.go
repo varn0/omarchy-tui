@@ -3,6 +3,7 @@ package tui
 import (
 	"omarchy-tui/internal/config"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -32,8 +33,17 @@ func NewAppsView(controller *Controller, app *tview.Application, root tview.Prim
 			av.showActionMenu(&av.apps[index])
 		}
 	})
-	av.list.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		av.UpdateSelection()
+	// Set input capture to update selection when user navigates
+	av.list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// Let the list handle up/down arrows, then update selection
+		if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyDown {
+			// Return event to let list process it, then update selection
+			// We'll update after the list processes the key
+			av.app.QueueUpdate(func() {
+				av.UpdateSelection()
+			})
+		}
+		return event // Let the event pass through to the list
 	})
 
 	return av
@@ -63,9 +73,7 @@ func (av *AppsView) SetCategory(categoryID string) {
 		av.list.AddItem("No apps in this category", "", 0, nil)
 	} else {
 		av.list.SetCurrentItem(0)
-		if len(av.apps) > 0 {
-			av.controller.SelectApp(&av.apps[0])
-		}
+		// Don't call SelectApp here - it will be done in updateViews() to avoid recursion
 	}
 }
 

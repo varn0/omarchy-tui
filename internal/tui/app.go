@@ -88,15 +88,17 @@ func (a *App) setupGlobalKeyHandlers() {
 			}
 		}
 
-		// Handle arrow keys for focus switching
+		// Handle arrow keys for focus switching and selection updates
+		currentFocus := a.app.GetFocus()
+
 		if event.Key() == tcell.KeyRight {
-			currentFocus := a.app.GetFocus()
 			if currentFocus == a.categoriesView.GetWidget() {
 				a.app.SetFocus(a.appsView.GetWidget())
+				// Update selection when switching to apps view
+				a.appsView.UpdateSelection()
 				return nil
 			}
 		} else if event.Key() == tcell.KeyLeft {
-			currentFocus := a.app.GetFocus()
 			if currentFocus == a.appsView.GetWidget() {
 				a.app.SetFocus(a.categoriesView.GetWidget())
 				return nil
@@ -112,7 +114,10 @@ func (a *App) updateViews() {
 	selectedCatID := a.controller.GetSelectedCategory()
 	if selectedCatID != "" {
 		a.appsView.SetCategory(selectedCatID)
-		a.appsView.UpdateSelection()
+		// Manually set the first app as selected without triggering callbacks
+		if len(a.appsView.apps) > 0 {
+			a.controller.SetSelectedAppSilent(&a.appsView.apps[0])
+		}
 	}
 
 	// Update bottom panel

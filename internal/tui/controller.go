@@ -16,12 +16,12 @@ const (
 
 // Controller manages application state and coordinates between views
 type Controller struct {
-	config         *config.OmarchyConfig
-	selectedCatID  string
-	selectedApp    *config.Application
-	defaultApps    map[string]*config.Application // categoryID -> app
-	editMode       EditMode
-	onStateChange  func() // callback for view updates
+	config        *config.OmarchyConfig
+	selectedCatID string
+	selectedApp   *config.Application
+	defaultApps   map[string]*config.Application // categoryID -> app
+	editMode      EditMode
+	onStateChange func() // callback for view updates
 }
 
 // NewController creates a new controller instance
@@ -52,6 +52,12 @@ func (c *Controller) SelectApp(app *config.Application) {
 	c.selectedApp = app
 	c.editMode = EditModeNone
 	c.notifyStateChange()
+}
+
+// SetSelectedAppSilent sets the selected application without triggering callbacks
+func (c *Controller) SetSelectedAppSilent(app *config.Application) {
+	c.selectedApp = app
+	c.editMode = EditModeNone
 }
 
 // GetSelectedCategory returns the currently selected category ID
@@ -120,4 +126,3 @@ func (c *Controller) notifyStateChange() {
 		c.onStateChange()
 	}
 }
-
