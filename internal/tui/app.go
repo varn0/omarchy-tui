@@ -25,9 +25,6 @@ func NewApp(cfg *config.OmarchyConfig) (*App, error) {
 
 	// Create controller
 	app.controller = NewController(cfg)
-	app.controller.SetStateChangeCallback(func() {
-		app.updateViews()
-	})
 
 	// Create temporary root for apps view
 	tempRoot := tview.NewBox()
@@ -42,6 +39,11 @@ func NewApp(cfg *config.OmarchyConfig) (*App, error) {
 
 	// Update apps view with real root
 	app.appsView.root = app.root
+
+	// Register state change callback after all views are created
+	app.controller.SetStateChangeCallback(func() {
+		app.updateViews()
+	})
 
 	// Set up global key handlers
 	app.setupGlobalKeyHandlers()
