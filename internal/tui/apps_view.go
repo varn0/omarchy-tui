@@ -4,13 +4,12 @@ import (
 	"omarchy-tui/internal/config"
 	"omarchy-tui/internal/logger"
 
-	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
 // AppsView manages the applications list panel
 type AppsView struct {
-	list       *tview.List
+	list       *NavigableList
 	controller *Controller
 	apps       []config.Application
 	app        *tview.Application
@@ -20,7 +19,7 @@ type AppsView struct {
 // NewAppsView creates a new apps view
 func NewAppsView(controller *Controller, app *tview.Application, root tview.Primitive) *AppsView {
 	av := &AppsView{
-		list:       tview.NewList(),
+		list:       NewNavigableList(app),
 		controller: controller,
 		apps:       []config.Application{},
 		app:        app,
@@ -29,32 +28,24 @@ func NewAppsView(controller *Controller, app *tview.Application, root tview.Prim
 
 	av.list.SetBorder(true)
 	av.list.SetTitle("Applications")
-	av.list.SetSelectedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
-		if index < len(av.apps) {
+
+	// Set up callbacks for NavigableList
+	av.list.SetOnSelectionChange(func(index int) {
+		av.UpdateSelection()
+	})
+
+	av.list.SetOnAction(func(index int) {
+		if index >= 0 && index < len(av.apps) {
 			av.showActionMenu(&av.apps[index])
 		}
 	})
-	// Selection updates are handled through keyboard events in app.go's global handler
-	// to avoid recursion during programmatic list updates
 
-	// Set input capture on apps list to handle global shortcuts when it has focus
-	av.list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// Handle global shortcuts first
-		switch event.Key() {
-		case tcell.KeyRune:
-			if event.Rune() == 'q' {
-				logger.Log("Quit key pressed from apps view, stopping application")
-				av.app.Stop()
-				return nil // Consume event
-			}
-		case tcell.KeyEscape:
-			// Let escape pass through for normal list behavior
-			// Application-level handler will catch it if needed
-			return event
+	av.list.SetOnGlobalShortcut(func(r rune) {
+		if r == 'q' {
+			logger.Log("Quit key pressed from apps view, stopping application")
+			app.Stop()
 		}
-
-		// Return event to allow normal list processing
-		return event
+		// Esc is handled by application-level handler if needed
 	})
 
 	return av

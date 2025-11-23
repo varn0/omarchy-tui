@@ -73,31 +73,13 @@ func (a *App) setupLayout() {
 	a.app.SetRoot(a.root, true)
 }
 
-// setupGlobalKeyHandlers registers global keyboard shortcuts
-// Sets input capture on root application for navigation and as fallback for global shortcuts
-// Widget-level handlers take precedence for global shortcuts when they have focus
+// setupGlobalKeyHandlers handles only cross-widget navigation (Left/Right)
+// All other events are handled by NavigableList widgets
 func (a *App) setupGlobalKeyHandlers() {
 	a.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// Handle escape for edit mode cancellation (fallback if widget doesn't handle it)
-		if event.Key() == tcell.KeyEscape {
-			if a.controller.GetEditMode() != EditModeNone {
-				a.controller.CancelEdit()
-				a.bottomPanel.SetInfoMode()
-				a.updateViews()
-				return nil
-			}
-		}
-
-		// Handle 'q' as fallback (widgets handle it when they have focus)
-		if event.Key() == tcell.KeyRune && event.Rune() == 'q' {
-			logger.Log("Quit key pressed (application-level fallback), stopping application")
-			a.app.Stop()
-			return nil
-		}
-
-		// Handle arrow keys for focus switching and selection updates
 		currentFocus := a.app.GetFocus()
 
+		// Only handle cross-widget navigation
 		if event.Key() == tcell.KeyRight {
 			if currentFocus == a.categoriesView.GetWidget() {
 				logger.Log("Focus moved right: categories -> apps")
@@ -106,27 +88,34 @@ func (a *App) setupGlobalKeyHandlers() {
 				a.app.QueueUpdate(func() {
 					a.appsView.UpdateSelection()
 				})
-				return nil
+				return nil // Consume event
 			}
-		} else if event.Key() == tcell.KeyLeft {
+			// Already on apps, let it handle normally
+			return event
+		}
+
+		if event.Key() == tcell.KeyLeft {
 			if currentFocus == a.appsView.GetWidget() {
 				logger.Log("Focus moved left: apps -> categories")
 				a.app.SetFocus(a.categoriesView.GetWidget())
-				return nil
+				return nil // Consume event
 			}
-		} else if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyDown {
-			// Handle Up/Down arrow keys for apps view selection updates
-			if currentFocus == a.appsView.GetWidget() {
-				// Let the list handle navigation first, then update selection
-				a.app.QueueUpdate(func() {
-					a.appsView.UpdateSelection()
-				})
-				// Return event so list can process it
-				return event
+			// Already on categories, let it handle normally
+			return event
+		}
+
+		// Handle Esc for edit mode cancellation (not handled by widgets)
+		if event.Key() == tcell.KeyEscape {
+			if a.controller.GetEditMode() != EditModeNone {
+				logger.Log("Escape: Cancelling edit mode")
+				a.controller.CancelEdit()
+				a.bottomPanel.SetInfoMode()
+				a.updateViews()
+				return nil
 			}
 		}
 
-		// Return event to allow normal processing by focused widget
+		// Everything else goes to widgets
 		return event
 	})
 }
