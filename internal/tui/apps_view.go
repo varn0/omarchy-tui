@@ -2,7 +2,9 @@ package tui
 
 import (
 	"omarchy-tui/internal/config"
+	"omarchy-tui/internal/logger"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -34,6 +36,26 @@ func NewAppsView(controller *Controller, app *tview.Application, root tview.Prim
 	})
 	// Selection updates are handled through keyboard events in app.go's global handler
 	// to avoid recursion during programmatic list updates
+
+	// Set input capture on apps list to handle global shortcuts when it has focus
+	av.list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// Handle global shortcuts first
+		switch event.Key() {
+		case tcell.KeyRune:
+			if event.Rune() == 'q' {
+				logger.Log("Quit key pressed from apps view, stopping application")
+				av.app.Stop()
+				return nil // Consume event
+			}
+		case tcell.KeyEscape:
+			// Let escape pass through for normal list behavior
+			// Application-level handler will catch it if needed
+			return event
+		}
+
+		// Return event to allow normal list processing
+		return event
+	})
 
 	return av
 }

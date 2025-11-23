@@ -100,11 +100,43 @@ After moving focus from categories view to apps view using the right arrow key, 
 ### Root Cause
 The global key handler was set on `topRow` using `topRow.SetInputCapture()`. In tview, when a child widget (like the apps list) has focus, events go directly to that widget first. If the child widget handles or consumes the event, it doesn't bubble up to the parent's input capture handler. The apps list widget handles navigation keys internally, and other keys (like 'q') were not propagating to the `topRow` input capture handler.
 
-### Solution
-Changed from `a.topRow.SetInputCapture()` to `a.app.SetInputCapture()` to set input capture on the root application instead of a parent widget. This intercepts all events before they reach any widget, ensuring global shortcuts work regardless of which widget has focus.
+### Solution (Attempt 1 - Failed)
+Changed from `a.topRow.SetInputCapture()` to `a.app.SetInputCapture()` to set input capture on the root application instead of a parent widget. This should intercept all events before they reach any widget, but the issue persisted.
 
 ### Files Changed
 - `internal/tui/app.go` - Changed `setupGlobalKeyHandlers()` to use `app.SetInputCapture()` instead of `topRow.SetInputCapture()`
+
+---
+
+## Error #6: Application Still Unresponsive After Application-Level Input Capture
+
+**Date:** After Error #5 fix  
+**Severity:** High - Application becomes unresponsive, fix didn't work
+
+### Description
+Even after moving input capture to the application level, the application still became unresponsive after moving focus to the apps view. The 'q' key and other global shortcuts were not working when focus was on the apps list widget.
+
+### Root Cause
+The `tview.List` widget may be consuming events internally before they reach the application-level input capture handler. When a list widget has focus, it processes events first, and some events may not propagate to the application-level handler even though `app.SetInputCapture()` should intercept them first.
+
+### Solution (Dual-Layer Input Capture)
+Implemented a dual-layer input capture system:
+1. **Widget-level capture**: Added `SetInputCapture` directly on both list widgets (categories and apps) to handle global shortcuts ('q', 'Esc') when they have focus
+2. **Application-level capture**: Kept application-level handler for navigation (arrow keys) and as a fallback for global shortcuts
+
+This ensures global shortcuts work regardless of which widget has focus, as each widget handles its own shortcuts when it receives focus.
+
+### Implementation Details
+- Added input capture to `apps_view.go` on the apps list widget to handle 'q' key
+- Added input capture to `categories_view.go` on the categories list widget to handle 'q' key
+- Updated `NewCategoriesView()` to accept `*tview.Application` parameter
+- Simplified application-level handler to focus on navigation, with global shortcuts as fallback
+- Both widget-level and application-level handlers log their actions for debugging
+
+### Files Changed
+- `internal/tui/apps_view.go` - Added `SetInputCapture` on apps list widget, imported `tcell` and `logger`
+- `internal/tui/categories_view.go` - Added `SetInputCapture` on categories list widget, updated constructor to accept app instance, imported `tcell` and `logger`
+- `internal/tui/app.go` - Updated `NewCategoriesView()` call to pass app instance, simplified application-level handler
 
 ---
 
@@ -113,12 +145,13 @@ Changed from `a.topRow.SetInputCapture()` to `a.app.SetInputCapture()` to set in
 ### Common Patterns
 1. **Callback Timing Issues:** Always register callbacks after all dependencies are initialized
 2. **Recursion Prevention:** Use "silent" methods that update state without triggering callbacks during programmatic updates
-3. **Event Propagation:** Use application-level input capture for global shortcuts, not widget-level capture
+3. **Event Propagation:** Use dual-layer input capture (widget-level + application-level) for global shortcuts when widgets may consume events
 4. **Initialization Order:** Be careful with initialization order to prevent premature state changes
 
 ### Best Practices
 - Use silent state update methods during programmatic changes
-- Set global input capture on the root application, not on parent widgets
+- Implement dual-layer input capture: widget-level handlers for when widgets have focus, application-level as fallback
 - Remove or guard callbacks that fire during programmatic widget updates
 - Handle selection updates through keyboard events rather than widget change callbacks
+- Each widget should handle global shortcuts when it has focus to ensure responsiveness
 

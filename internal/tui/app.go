@@ -32,7 +32,7 @@ func NewApp(cfg *config.OmarchyConfig) (*App, error) {
 	tempRoot := tview.NewBox()
 
 	// Create views
-	app.categoriesView = NewCategoriesView(cfg.Categories, app.controller)
+	app.categoriesView = NewCategoriesView(cfg.Categories, app.controller, app.app)
 	app.appsView = NewAppsView(app.controller, app.app, tempRoot)
 	app.bottomPanel = NewBottomPanel(app.controller)
 
@@ -74,24 +74,25 @@ func (a *App) setupLayout() {
 }
 
 // setupGlobalKeyHandlers registers global keyboard shortcuts
-// Sets input capture on root application to intercept all events before any widget
+// Sets input capture on root application for navigation and as fallback for global shortcuts
+// Widget-level handlers take precedence for global shortcuts when they have focus
 func (a *App) setupGlobalKeyHandlers() {
 	a.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// Handle global shortcuts first (quit, escape)
-		switch event.Key() {
-		case tcell.KeyEscape:
+		// Handle escape for edit mode cancellation (fallback if widget doesn't handle it)
+		if event.Key() == tcell.KeyEscape {
 			if a.controller.GetEditMode() != EditModeNone {
 				a.controller.CancelEdit()
 				a.bottomPanel.SetInfoMode()
 				a.updateViews()
 				return nil
 			}
-		case tcell.KeyRune:
-			if event.Rune() == 'q' {
-				logger.Log("Quit key pressed, stopping application")
-				a.app.Stop()
-				return nil
-			}
+		}
+
+		// Handle 'q' as fallback (widgets handle it when they have focus)
+		if event.Key() == tcell.KeyRune && event.Rune() == 'q' {
+			logger.Log("Quit key pressed (application-level fallback), stopping application")
+			a.app.Stop()
+			return nil
 		}
 
 		// Handle arrow keys for focus switching and selection updates

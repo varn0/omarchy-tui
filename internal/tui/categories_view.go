@@ -2,7 +2,9 @@ package tui
 
 import (
 	"omarchy-tui/internal/config"
+	"omarchy-tui/internal/logger"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -12,15 +14,17 @@ type CategoriesView struct {
 	controller *Controller
 	categories []config.Category
 	selected   int
+	app        *tview.Application
 }
 
 // NewCategoriesView creates a new categories view
-func NewCategoriesView(categories []config.Category, controller *Controller) *CategoriesView {
+func NewCategoriesView(categories []config.Category, controller *Controller, app *tview.Application) *CategoriesView {
 	cv := &CategoriesView{
 		list:       tview.NewList(),
 		controller: controller,
 		categories: categories,
 		selected:   0,
+		app:        app,
 	}
 
 	cv.list.SetBorder(true)
@@ -47,6 +51,26 @@ func NewCategoriesView(categories []config.Category, controller *Controller) *Ca
 		cv.list.SetCurrentItem(0)
 		cv.controller.SetSelectedCategorySilent(categories[0].ID)
 	}
+
+	// Set input capture on categories list to handle global shortcuts when it has focus
+	cv.list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// Handle global shortcuts first
+		switch event.Key() {
+		case tcell.KeyRune:
+			if event.Rune() == 'q' {
+				logger.Log("Quit key pressed from categories view, stopping application")
+				cv.app.Stop()
+				return nil // Consume event
+			}
+		case tcell.KeyEscape:
+			// Let escape pass through for normal list behavior
+			// Application-level handler will catch it if needed
+			return event
+		}
+
+		// Return event to allow normal list processing
+		return event
+	})
 
 	return cv
 }
