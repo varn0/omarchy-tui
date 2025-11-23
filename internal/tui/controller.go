@@ -47,6 +47,13 @@ func (c *Controller) SelectCategory(categoryID string) {
 	c.notifyStateChange()
 }
 
+// SetSelectedCategorySilent sets the selected category without triggering callbacks
+func (c *Controller) SetSelectedCategorySilent(categoryID string) {
+	c.selectedCatID = categoryID
+	c.selectedApp = nil
+	c.editMode = EditModeNone
+}
+
 // SelectApp sets the selected application
 func (c *Controller) SelectApp(app *config.Application) {
 	c.selectedApp = app

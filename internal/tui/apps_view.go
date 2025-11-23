@@ -66,7 +66,7 @@ func (av *AppsView) SetCategory(categoryID string) {
 		if defaultApp != nil && app.PackageName == defaultApp.PackageName {
 			mainText = "* " + mainText
 		}
-		av.list.AddItem(mainText, app.PackageName, 0, nil)
+		av.list.AddItem(mainText, "", 0, nil)
 	}
 
 	if len(av.apps) == 0 {

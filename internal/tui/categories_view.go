@@ -41,10 +41,11 @@ func NewCategoriesView(categories []config.Category, controller *Controller) *Ca
 		cv.list.AddItem(cat.Name, "", 0, nil)
 	}
 
-	// Set initial selection
+	// Set initial selection silently (without triggering callbacks)
+	// The callback will be registered later and updateViews() will be called explicitly
 	if len(categories) > 0 {
 		cv.list.SetCurrentItem(0)
-		cv.controller.SelectCategory(categories[0].ID)
+		cv.controller.SetSelectedCategorySilent(categories[0].ID)
 	}
 
 	return cv
