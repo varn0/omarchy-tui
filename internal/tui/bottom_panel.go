@@ -67,35 +67,6 @@ func (bp *BottomPanel) SetConfigMode(content string) {
 	bp.textArea.SetText(content, true)
 }
 
-// UpdateCategoryInfo updates the display with category information
-func (bp *BottomPanel) UpdateCategoryInfo(category *config.Category, apps []config.Application) {
-	if bp.mode != "info" {
-		return
-	}
-
-	text := fmt.Sprintf("[yellow]Category:[-] %s\n", category.Name)
-	text += fmt.Sprintf("[yellow]ID:[-] %s\n\n", category.ID)
-
-	defaultApp := bp.controller.GetDefaultApp(category.ID)
-	if defaultApp != nil {
-		text += fmt.Sprintf("[green]Default App:[-] %s (%s)\n", defaultApp.Name, defaultApp.PackageName)
-	} else {
-		text += "[yellow]Default App:[-] Not set\n"
-	}
-
-	text += fmt.Sprintf("\n[yellow]Applications in category:[-] %d\n", len(apps))
-	for i, app := range apps {
-		marker := "  "
-		if defaultApp != nil && app.PackageName == defaultApp.PackageName {
-			marker = "[green]*[-] "
-		}
-		text += fmt.Sprintf("%s%d. %s (%s)\n", marker, i+1, app.Name, app.PackageName)
-	}
-
-	bp.textView.Clear()
-	fmt.Fprint(bp.textView, text)
-}
-
 // UpdateAppInfo updates the display with application information
 func (bp *BottomPanel) UpdateAppInfo(app *config.Application, isDefault bool) {
 	if bp.mode != "info" {
@@ -108,9 +79,9 @@ func (bp *BottomPanel) UpdateAppInfo(app *config.Application, isDefault bool) {
 	text += fmt.Sprintf("[yellow]Keybinding:[-] %s\n", app.Keybinding)
 
 	if isDefault {
-		text += fmt.Sprintf("\n[green]Status: Default app for category[-]\n")
+		text += "\n[green]Status: Default app for category[-]\n"
 	} else {
-		text += fmt.Sprintf("\n[yellow]Status: Not default[-]\n")
+		text += "\n[yellow]Status: Not default[-]\n"
 	}
 
 	if app.ConfigFile != "" {
@@ -136,21 +107,18 @@ func (bp *BottomPanel) GetEditedContent() string {
 // updateInfo updates the info display based on current controller state
 func (bp *BottomPanel) updateInfo() {
 	selectedApp := bp.controller.GetSelectedApp()
-	selectedCatID := bp.controller.GetSelectedCategory()
 
 	if selectedApp != nil {
 		isDefault := false
-		defaultApp := bp.controller.GetDefaultApp(selectedCatID)
+		defaultApp := bp.controller.GetDefaultAppForCategory(selectedApp.Category)
 		if defaultApp != nil && selectedApp.PackageName == defaultApp.PackageName {
 			isDefault = true
 		}
 		bp.UpdateAppInfo(selectedApp, isDefault)
-	} else if selectedCatID != "" {
-		cat := bp.controller.GetConfig().GetCategoryByID(selectedCatID)
-		if cat != nil {
-			apps := bp.controller.GetAppsForCategory(selectedCatID)
-			bp.UpdateCategoryInfo(cat, apps)
-		}
+	} else {
+		// Show empty state
+		bp.textView.Clear()
+		fmt.Fprint(bp.textView, "[yellow]No app selected[-]")
 	}
 }
 

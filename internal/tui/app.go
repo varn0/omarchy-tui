@@ -10,13 +10,11 @@ import (
 
 // App represents the root TUI application
 type App struct {
-	app            *tview.Application
-	controller     *Controller
-	categoriesView *CategoriesView
-	appsView       *AppsView
-	bottomPanel    *BottomPanel
-	root           *tview.Flex
-	topRow         *tview.Flex
+	app         *tview.Application
+	controller  *Controller
+	appsView    *AppsView
+	bottomPanel *BottomPanel
+	root        *tview.Flex
 }
 
 // NewApp creates a new TUI application instance
@@ -32,7 +30,6 @@ func NewApp(cfg *config.OmarchyConfig) (*App, error) {
 	tempRoot := tview.NewBox()
 
 	// Create views
-	app.categoriesView = NewCategoriesView(cfg.Categories, app.controller, app.app)
 	app.appsView = NewAppsView(app.controller, app.app, tempRoot)
 	app.bottomPanel = NewBottomPanel(app.controller)
 
@@ -48,7 +45,7 @@ func NewApp(cfg *config.OmarchyConfig) (*App, error) {
 		app.updateViews()
 	})
 
-	// Set up global key handlers (must be after setupLayout so topRow exists)
+	// Set up global key handlers (must be after setupLayout)
 	app.setupGlobalKeyHandlers()
 
 	// Initial update
@@ -57,54 +54,29 @@ func NewApp(cfg *config.OmarchyConfig) (*App, error) {
 	return app, nil
 }
 
-// setupLayout creates the three-panel layout using Flex
+// setupLayout creates the two-panel layout using Flex
 func (a *App) setupLayout() {
-	// Top row: Categories (left) and Apps (right)
-	a.topRow = tview.NewFlex().
-		AddItem(a.categoriesView.GetWidget(), 0, 3, true).
-		AddItem(a.appsView.GetWidget(), 0, 7, false)
-
-	// Root: Top row and bottom panel
+	// Root: App list (top) and bottom panel
 	a.root = tview.NewFlex().
 		SetDirection(tview.FlexRow).
-		AddItem(a.topRow, 0, 3, false).
+		AddItem(a.appsView.GetWidget(), 0, 3, true).
 		AddItem(a.bottomPanel.GetWidget(), 0, 1, false)
 
 	a.app.SetRoot(a.root, true)
 }
 
-// setupGlobalKeyHandlers handles only cross-widget navigation (Left/Right)
-// All other events are handled by NavigableList widgets
+// setupGlobalKeyHandlers implements the centralized event router pattern
+// All events are handled at the application level
 func (a *App) setupGlobalKeyHandlers() {
 	a.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		currentFocus := a.app.GetFocus()
-
-		// Only handle cross-widget navigation
-		if event.Key() == tcell.KeyRight {
-			if currentFocus == a.categoriesView.GetWidget() {
-				logger.Log("Focus moved right: categories -> apps")
-				a.app.SetFocus(a.appsView.GetWidget())
-				// Update selection when switching to apps view
-				a.app.QueueUpdate(func() {
-					a.appsView.UpdateSelection()
-				})
-				return nil // Consume event
-			}
-			// Already on apps, let it handle normally
-			return event
+		// Global shortcuts - consume immediately
+		if event.Key() == tcell.KeyRune && event.Rune() == 'q' {
+			logger.Log("Quit key pressed, stopping application")
+			a.app.Stop()
+			return nil
 		}
 
-		if event.Key() == tcell.KeyLeft {
-			if currentFocus == a.appsView.GetWidget() {
-				logger.Log("Focus moved left: apps -> categories")
-				a.app.SetFocus(a.categoriesView.GetWidget())
-				return nil // Consume event
-			}
-			// Already on categories, let it handle normally
-			return event
-		}
-
-		// Handle Esc for edit mode cancellation (not handled by widgets)
+		// Handle Esc for edit mode cancellation
 		if event.Key() == tcell.KeyEscape {
 			if a.controller.GetEditMode() != EditModeNone {
 				logger.Log("Escape: Cancelling edit mode")
@@ -115,23 +87,51 @@ func (a *App) setupGlobalKeyHandlers() {
 			}
 		}
 
-		// Everything else goes to widgets
+		// Up/Down navigation - manually control list selection
+		if event.Key() == tcell.KeyUp {
+			currentIndex := a.appsView.list.GetCurrentItem()
+			if currentIndex > 0 {
+				newIndex := currentIndex - 1
+				a.app.QueueUpdate(func() {
+					a.appsView.list.SetCurrentItem(newIndex)
+					a.appsView.UpdateSelection()
+				})
+			}
+			return nil // Consume event
+		}
+
+		if event.Key() == tcell.KeyDown {
+			currentIndex := a.appsView.list.GetCurrentItem()
+			if currentIndex < a.appsView.list.GetItemCount()-1 {
+				newIndex := currentIndex + 1
+				a.app.QueueUpdate(func() {
+					a.appsView.list.SetCurrentItem(newIndex)
+					a.appsView.UpdateSelection()
+				})
+			}
+			return nil // Consume event
+		}
+
+		// Enter - manually trigger action
+		if event.Key() == tcell.KeyEnter {
+			selectedApp := a.appsView.GetSelected()
+			if selectedApp != nil {
+				logger.Log("Enter pressed, showing action menu for: %s", selectedApp.Name)
+				a.app.QueueUpdate(func() {
+					a.appsView.showActionMenu(selectedApp)
+				})
+			}
+			return nil // Consume event
+		}
+
+		// All other events - forward to focused widget
 		return event
 	})
 }
 
 // updateViews updates all views based on controller state
 func (a *App) updateViews() {
-	selectedCatID := a.controller.GetSelectedCategory()
-	if selectedCatID != "" {
-		logger.Log("Updating views for category: %s", selectedCatID)
-		a.appsView.SetCategory(selectedCatID)
-		// Manually set the first app as selected without triggering callbacks
-		if len(a.appsView.apps) > 0 {
-			a.controller.SetSelectedAppSilent(&a.appsView.apps[0])
-			logger.Log("Selected first app: %s", a.appsView.apps[0].Name)
-		}
-	}
+	logger.Log("Updating views")
 
 	// Update bottom panel
 	if a.controller.GetEditMode() == EditModeNone {
@@ -145,8 +145,8 @@ func (a *App) updateViews() {
 
 // Run starts the application event loop
 func (a *App) Run() error {
-	// Set initial focus to categories
+	// Set initial focus to apps list
 	logger.Log("Starting TUI event loop")
-	a.app.SetFocus(a.categoriesView.GetWidget())
+	a.app.SetFocus(a.appsView.GetWidget())
 	return a.app.Run()
 }

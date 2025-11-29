@@ -18,7 +18,6 @@ const (
 // Controller manages application state and coordinates between views
 type Controller struct {
 	config        *config.OmarchyConfig
-	selectedCatID string
 	selectedApp   *config.Application
 	defaultApps   map[string]*config.Application // categoryID -> app
 	editMode      EditMode
@@ -40,22 +39,6 @@ func (c *Controller) SetStateChangeCallback(fn func()) {
 	c.onStateChange = fn
 }
 
-// SelectCategory sets the selected category and clears app selection
-func (c *Controller) SelectCategory(categoryID string) {
-	logger.Log("Controller: Selecting category: %s", categoryID)
-	c.selectedCatID = categoryID
-	c.selectedApp = nil
-	c.editMode = EditModeNone
-	c.notifyStateChange()
-}
-
-// SetSelectedCategorySilent sets the selected category without triggering callbacks
-func (c *Controller) SetSelectedCategorySilent(categoryID string) {
-	c.selectedCatID = categoryID
-	c.selectedApp = nil
-	c.editMode = EditModeNone
-}
-
 // SelectApp sets the selected application
 func (c *Controller) SelectApp(app *config.Application) {
 	if app != nil {
@@ -72,24 +55,14 @@ func (c *Controller) SetSelectedAppSilent(app *config.Application) {
 	c.editMode = EditModeNone
 }
 
-// GetSelectedCategory returns the currently selected category ID
-func (c *Controller) GetSelectedCategory() string {
-	return c.selectedCatID
-}
-
 // GetSelectedApp returns the currently selected application
 func (c *Controller) GetSelectedApp() *config.Application {
 	return c.selectedApp
 }
 
-// GetAppsForCategory returns all applications for the given category
-func (c *Controller) GetAppsForCategory(categoryID string) []config.Application {
-	return c.config.GetAppsByCategory(categoryID)
-}
-
-// GetDefaultApp returns the default app for a category, or nil if none set
-func (c *Controller) GetDefaultApp(categoryID string) *config.Application {
-	return c.defaultApps[categoryID]
+// GetAllApps returns all applications from the configuration
+func (c *Controller) GetAllApps() []config.Application {
+	return c.config.AppsInventory
 }
 
 // SetDefaultApp sets the default app for a category
@@ -101,6 +74,11 @@ func (c *Controller) SetDefaultApp(categoryID string, app *config.Application) e
 	c.defaultApps[categoryID] = app
 	c.notifyStateChange()
 	return nil
+}
+
+// GetDefaultAppForCategory returns the default app for a category, or nil if none set
+func (c *Controller) GetDefaultAppForCategory(categoryID string) *config.Application {
+	return c.defaultApps[categoryID]
 }
 
 // LaunchApp launches the given application

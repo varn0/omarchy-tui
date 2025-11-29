@@ -9,7 +9,7 @@ import (
 
 // AppsView manages the applications list panel
 type AppsView struct {
-	list       *NavigableList
+	list       *tview.List
 	controller *Controller
 	apps       []config.Application
 	app        *tview.Application
@@ -19,7 +19,7 @@ type AppsView struct {
 // NewAppsView creates a new apps view
 func NewAppsView(controller *Controller, app *tview.Application, root tview.Primitive) *AppsView {
 	av := &AppsView{
-		list:       NewNavigableList(app),
+		list:       tview.NewList(),
 		controller: controller,
 		apps:       []config.Application{},
 		app:        app,
@@ -29,24 +29,8 @@ func NewAppsView(controller *Controller, app *tview.Application, root tview.Prim
 	av.list.SetBorder(true)
 	av.list.SetTitle("Applications")
 
-	// Set up callbacks for NavigableList
-	av.list.SetOnSelectionChange(func(index int) {
-		av.UpdateSelection()
-	})
-
-	av.list.SetOnAction(func(index int) {
-		if index >= 0 && index < len(av.apps) {
-			av.showActionMenu(&av.apps[index])
-		}
-	})
-
-	av.list.SetOnGlobalShortcut(func(r rune) {
-		if r == 'q' {
-			logger.Log("Quit key pressed from apps view, stopping application")
-			app.Stop()
-		}
-		// Esc is handled by application-level handler if needed
-	})
+	// Load all apps
+	av.loadAllApps()
 
 	return av
 }
@@ -56,14 +40,14 @@ func (av *AppsView) GetWidget() tview.Primitive {
 	return av.list
 }
 
-// SetCategory updates the apps list for the given category
-func (av *AppsView) SetCategory(categoryID string) {
-	av.apps = av.controller.GetAppsForCategory(categoryID)
+// loadAllApps loads all apps from the configuration into the list
+func (av *AppsView) loadAllApps() {
+	av.apps = av.controller.GetAllApps()
 	av.list.Clear()
 
-	defaultApp := av.controller.GetDefaultApp(categoryID)
-
 	for _, app := range av.apps {
+		// Check if this app is default for its category
+		defaultApp := av.controller.GetDefaultAppForCategory(app.Category)
 		mainText := app.Name
 		if defaultApp != nil && app.PackageName == defaultApp.PackageName {
 			mainText = "* " + mainText
@@ -72,10 +56,14 @@ func (av *AppsView) SetCategory(categoryID string) {
 	}
 
 	if len(av.apps) == 0 {
-		av.list.AddItem("No apps in this category", "", 0, nil)
+		av.list.AddItem("No apps available", "", 0, nil)
 	} else {
 		av.list.SetCurrentItem(0)
-		// Don't call SelectApp here - it will be done in updateViews() to avoid recursion
+		// Select first app
+		if len(av.apps) > 0 {
+			av.controller.SetSelectedAppSilent(&av.apps[0])
+			logger.Log("Selected first app: %s", av.apps[0].Name)
+		}
 	}
 }
 
@@ -109,8 +97,8 @@ func (av *AppsView) showActionMenu(app *config.Application) {
 			case "Launch":
 				av.controller.LaunchApp(app)
 			case "Set Default":
-				av.controller.SetDefaultApp(av.controller.GetSelectedCategory(), app)
-				av.SetCategory(av.controller.GetSelectedCategory()) // Refresh list
+				av.controller.SetDefaultApp(app.Category, app)
+				av.loadAllApps() // Refresh list
 			case "Configure":
 				av.controller.EnterEditMode(EditModeAppConfig)
 			}
