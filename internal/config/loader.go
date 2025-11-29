@@ -3,6 +3,7 @@ package config
 import (
 	"bufio"
 	"fmt"
+	"omarchy-tui/internal/logger"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -63,6 +64,12 @@ func LoadConfig() (*OmarchyConfig, error) {
 
 	if err := validateConfig(&config); err != nil {
 		return nil, fmt.Errorf("configuration validation failed: %w", err)
+	}
+
+	// Update keybindings from Hyprland config if available
+	if err := updateKeybindingsFromHypr(&config); err != nil {
+		// Log but don't fail - keybindings are optional
+		// Could add logging here if logger is available
 	}
 
 	return &config, nil
@@ -443,4 +450,235 @@ func writeConfig(configPath string, config *OmarchyConfig) error {
 	}
 
 	return nil
+}
+
+// updateKeybindingsFromHypr updates keybindings in config from Hyprland bindings.conf
+func updateKeybindingsFromHypr(config *OmarchyConfig) error {
+	logger.Log("updateKeybindingsFromHypr: Entering function")
+	hyprPath, err := expandPath("~/.config/hypr/bindings.conf")
+	if err != nil {
+		return fmt.Errorf("failed to expand hypr config path: %w", err)
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(hyprPath); os.IsNotExist(err) {
+		// File doesn't exist, that's okay - just return
+		logger.Log("updateKeybindingsFromHypr: Hyprland bindings.conf not found at %s", hyprPath)
+		return nil
+	}
+	logger.Log("updateKeybindingsFromHypr: Found Hyprland bindings.conf at %s", hyprPath)
+
+	// Extract keybindings from Hyprland config
+	keybindings, err := extractKeybindingsFromHypr(hyprPath)
+	if err != nil {
+		return fmt.Errorf("failed to extract keybindings: %w", err)
+	}
+	logger.Log("updateKeybindingsFromHypr: Extracted %d keybindings", len(keybindings))
+
+	// Update apps with matching keybindings
+	updatedCount := 0
+	for i := range config.AppsInventory {
+		app := &config.AppsInventory[i]
+		// Only update if keybinding is empty
+		if app.Keybinding == "" {
+			// Try exact match (case-insensitive)
+			appNameLower := strings.ToLower(app.Name)
+			if keybinding, found := keybindings[appNameLower]; found {
+				app.Keybinding = keybinding
+				logger.Log("updateKeybindingsFromHypr: Matched app '%s' with keybinding '%s' (exact match)", app.Name, keybinding)
+				updatedCount++
+				continue
+			}
+
+			// Try partial match - check if app name contains any keybinding key
+			for keybindingAppName, keybinding := range keybindings {
+				if strings.Contains(appNameLower, keybindingAppName) || strings.Contains(keybindingAppName, appNameLower) {
+					app.Keybinding = keybinding
+					logger.Log("updateKeybindingsFromHypr: Matched app '%s' with keybinding '%s' (partial match with '%s')", app.Name, keybinding, keybindingAppName)
+					updatedCount++
+					break
+				}
+			}
+		}
+	}
+	logger.Log("updateKeybindingsFromHypr: Updated %d apps with keybindings", updatedCount)
+
+	return nil
+}
+
+// extractKeybindingsFromHypr parses Hyprland bindings.conf and returns a map of app name -> keybinding
+func extractKeybindingsFromHypr(configPath string) (map[string]string, error) {
+	logger.Log("extractKeybindingsFromHypr: Entering function, parsing %s", configPath)
+	file, err := os.Open(configPath)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	keybindings := make(map[string]string)
+	mainMod := "SUPER" // default
+
+	// First pass: find mainMod variable
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if strings.HasPrefix(line, "$mainMod") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 {
+				mainMod = strings.TrimSpace(parts[1])
+				logger.Log("extractKeybindingsFromHypr: Found mainMod = %s", mainMod)
+			}
+		}
+	}
+
+	// Reset file for second pass
+	file.Seek(0, 0)
+	scanner = bufio.NewScanner(file)
+
+	// Second pass: parse bind lines
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+
+		// Skip comments and empty lines
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		// Check for bind lines (including bindd format)
+		if strings.HasPrefix(line, "bindd =") || strings.HasPrefix(line, "bind =") || strings.HasPrefix(line, "bindr =") || strings.HasPrefix(line, "bindl =") {
+			keybinding, appName, err := parseHyprBindLine(line, mainMod)
+			if err != nil {
+				// Skip invalid lines
+				logger.Log("extractKeybindingsFromHypr: Skipping invalid bind line: %s (error: %v)", line, err)
+				continue
+			}
+			if appName != "" && keybinding != "" {
+				keybindings[strings.ToLower(appName)] = keybinding
+				logger.Log("extractKeybindingsFromHypr: Parsed bind - app: %s, keybinding: %s", appName, keybinding)
+			}
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	logger.Log("extractKeybindingsFromHypr: Successfully extracted %d keybindings", len(keybindings))
+	return keybindings, nil
+}
+
+// parseHyprBindLine parses a single bind line and returns keybinding and app name
+func parseHyprBindLine(line string, mainMod string) (keybinding, appName string, err error) {
+	logger.Log("parseHyprBindLine: Entering function, parsing line: %s", line)
+	// Format: bind = MODIFIERS, KEY, exec, COMMAND [ARGS]
+	// Example: bind = $mainMod, F, exec, firefox
+
+	// Remove "bindd =", "bind =", "bindr =", or "bindl ="
+	line = strings.TrimPrefix(line, "bindd =")
+	line = strings.TrimPrefix(line, "bind =")
+	line = strings.TrimPrefix(line, "bindr =")
+	line = strings.TrimPrefix(line, "bindl =")
+	line = strings.TrimSpace(line)
+
+	// Split by comma
+	parts := strings.Split(line, ",")
+	if len(parts) < 4 {
+		return "", "", fmt.Errorf("invalid bind line format")
+	}
+
+	// Extract modifiers and key
+	modifiers := strings.TrimSpace(parts[0])
+	key := strings.TrimSpace(parts[1])
+	thirdPart := strings.TrimSpace(parts[2])
+
+	// Check if third part is "exec" (old format) or a label (bindd format)
+	if thirdPart == "exec" {
+		// Old format: MODIFIERS, KEY, exec, COMMAND
+		if len(parts) < 4 {
+			return "", "", fmt.Errorf("missing command")
+		}
+		command := strings.TrimSpace(parts[3])
+		// Extract app name from command for old format
+		appName = extractAppNameFromCommand(command)
+		logger.Log("parseHyprBindLine: Old format detected, extracted app name: %s from command: %s", appName, command)
+	} else if len(parts) >= 5 {
+		// bindd format: MODIFIERS, KEY, LABEL, exec, COMMAND
+		label := thirdPart
+		execCmd := strings.TrimSpace(parts[3])
+		if execCmd != "exec" {
+			return "", "", fmt.Errorf("not an exec command")
+		}
+		// Use LABEL as app name (this is what we match against app.Name in config)
+		appName = label
+		logger.Log("parseHyprBindLine: bindd format detected, using LABEL as app name: %s", appName)
+	} else {
+		return "", "", fmt.Errorf("not an exec command or invalid format")
+	}
+
+	// Normalize keybinding
+	keybinding = normalizeKeybinding(modifiers, key, mainMod)
+	logger.Log("parseHyprBindLine: Normalized keybinding: %s (from modifiers: %s, key: %s)", keybinding, modifiers, key)
+
+	return keybinding, appName, nil
+}
+
+// extractAppNameFromCommand extracts application name from exec command
+func extractAppNameFromCommand(command string) string {
+	logger.Log("extractAppNameFromCommand: Entering function, command: %s", command)
+	// Remove common prefixes and extract base name
+	command = strings.TrimSpace(command)
+
+	// Handle paths: /usr/bin/firefox -> firefox
+	if strings.Contains(command, "/") {
+		command = filepath.Base(command)
+	}
+
+	// Remove common suffixes and arguments
+	parts := strings.Fields(command)
+	if len(parts) > 0 {
+		appName := parts[0]
+		// Remove file extensions if any
+		appName = strings.TrimSuffix(appName, ".sh")
+		appName = strings.TrimSuffix(appName, ".exe")
+		logger.Log("extractAppNameFromCommand: Extracted app name: %s", appName)
+		return appName
+	}
+
+	logger.Log("extractAppNameFromCommand: Returning command as-is: %s", command)
+	return command
+}
+
+// normalizeKeybinding converts Hyprland keybinding format to omarchy format
+func normalizeKeybinding(modifiers, key, mainMod string) string {
+	logger.Log("normalizeKeybinding: Entering function, modifiers: %s, key: %s, mainMod: %s", modifiers, key, mainMod)
+	// Replace $mainMod with actual modifier
+	modifiers = strings.ReplaceAll(modifiers, "$mainMod", mainMod)
+	modifiers = strings.TrimSpace(modifiers)
+
+	// Split modifiers
+	modParts := strings.Fields(modifiers)
+	var normalized []string
+
+	for _, mod := range modParts {
+		mod = strings.ToUpper(mod)
+		switch mod {
+		case "SUPER", "WIN", "MOD":
+			normalized = append(normalized, "MOD")
+		case "SHIFT":
+			normalized = append(normalized, "SHIFT")
+		case "CTRL", "CONTROL":
+			normalized = append(normalized, "CTRL")
+		case "ALT":
+			normalized = append(normalized, "ALT")
+		}
+	}
+
+	// Add the key
+	key = strings.ToUpper(key)
+	normalized = append(normalized, key)
+
+	// Join with +
+	result := strings.Join(normalized, "+")
+	logger.Log("normalizeKeybinding: Normalized result: %s", result)
+	return result
 }
