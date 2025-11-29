@@ -508,7 +508,6 @@ func updateKeybindingsFromHypr(config *OmarchyConfig) error {
 
 // extractKeybindingsFromHypr parses Hyprland bindings.conf and returns a map of app name -> keybinding
 func extractKeybindingsFromHypr(configPath string) (map[string]string, error) {
-	logger.Log("extractKeybindingsFromHypr: Entering function, parsing %s", configPath)
 	file, err := os.Open(configPath)
 	if err != nil {
 		return nil, err
@@ -526,7 +525,6 @@ func extractKeybindingsFromHypr(configPath string) (map[string]string, error) {
 			parts := strings.SplitN(line, "=", 2)
 			if len(parts) == 2 {
 				mainMod = strings.TrimSpace(parts[1])
-				logger.Log("extractKeybindingsFromHypr: Found mainMod = %s", mainMod)
 			}
 		}
 	}
@@ -549,12 +547,10 @@ func extractKeybindingsFromHypr(configPath string) (map[string]string, error) {
 			keybinding, appName, err := parseHyprBindLine(line, mainMod)
 			if err != nil {
 				// Skip invalid lines
-				logger.Log("extractKeybindingsFromHypr: Skipping invalid bind line: %s (error: %v)", line, err)
 				continue
 			}
 			if appName != "" && keybinding != "" {
 				keybindings[strings.ToLower(appName)] = keybinding
-				logger.Log("extractKeybindingsFromHypr: Parsed bind - app: %s, keybinding: %s", appName, keybinding)
 			}
 		}
 	}
@@ -563,13 +559,11 @@ func extractKeybindingsFromHypr(configPath string) (map[string]string, error) {
 		return nil, err
 	}
 
-	logger.Log("extractKeybindingsFromHypr: Successfully extracted %d keybindings", len(keybindings))
 	return keybindings, nil
 }
 
 // parseHyprBindLine parses a single bind line and returns keybinding and app name
 func parseHyprBindLine(line string, mainMod string) (keybinding, appName string, err error) {
-	logger.Log("parseHyprBindLine: Entering function, parsing line: %s", line)
 	// Format: bind = MODIFIERS, KEY, exec, COMMAND [ARGS]
 	// Example: bind = $mainMod, F, exec, firefox
 
@@ -600,7 +594,6 @@ func parseHyprBindLine(line string, mainMod string) (keybinding, appName string,
 		command := strings.TrimSpace(parts[3])
 		// Extract app name from command for old format
 		appName = extractAppNameFromCommand(command)
-		logger.Log("parseHyprBindLine: Old format detected, extracted app name: %s from command: %s", appName, command)
 	} else if len(parts) >= 5 {
 		// bindd format: MODIFIERS, KEY, LABEL, exec, COMMAND
 		label := thirdPart
@@ -610,14 +603,12 @@ func parseHyprBindLine(line string, mainMod string) (keybinding, appName string,
 		}
 		// Use LABEL as app name (this is what we match against app.Name in config)
 		appName = label
-		logger.Log("parseHyprBindLine: bindd format detected, using LABEL as app name: %s", appName)
 	} else {
 		return "", "", fmt.Errorf("not an exec command or invalid format")
 	}
 
 	// Normalize keybinding
 	keybinding = normalizeKeybinding(modifiers, key, mainMod)
-	logger.Log("parseHyprBindLine: Normalized keybinding: %s (from modifiers: %s, key: %s)", keybinding, modifiers, key)
 
 	return keybinding, appName, nil
 }
@@ -650,7 +641,6 @@ func extractAppNameFromCommand(command string) string {
 
 // normalizeKeybinding converts Hyprland keybinding format to omarchy format
 func normalizeKeybinding(modifiers, key, mainMod string) string {
-	logger.Log("normalizeKeybinding: Entering function, modifiers: %s, key: %s, mainMod: %s", modifiers, key, mainMod)
 	// Replace $mainMod with actual modifier
 	modifiers = strings.ReplaceAll(modifiers, "$mainMod", mainMod)
 	modifiers = strings.TrimSpace(modifiers)
@@ -662,8 +652,10 @@ func normalizeKeybinding(modifiers, key, mainMod string) string {
 	for _, mod := range modParts {
 		mod = strings.ToUpper(mod)
 		switch mod {
-		case "SUPER", "WIN", "MOD":
-			normalized = append(normalized, "MOD")
+		case "SUPER", "MOD":
+			normalized = append(normalized, "SUPER")
+		case "WIN":
+			normalized = append(normalized, "WIN")
 		case "SHIFT":
 			normalized = append(normalized, "SHIFT")
 		case "CTRL", "CONTROL":
@@ -679,6 +671,5 @@ func normalizeKeybinding(modifiers, key, mainMod string) string {
 
 	// Join with +
 	result := strings.Join(normalized, "+")
-	logger.Log("normalizeKeybinding: Normalized result: %s", result)
 	return result
 }
