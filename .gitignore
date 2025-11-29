@@ -32,3 +32,4 @@ go.work.sum
 # .vscode/
 omarchy
 *.log
+specs-load-app-data.md
