@@ -29,6 +29,11 @@ func NewAppsView(controller *Controller, app *tview.Application, root tview.Prim
 	av.list.SetBorder(true)
 	av.list.SetTitle("Applications")
 
+	// Set up callback to update controller when selection changes
+	av.list.SetChangedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
+		av.UpdateSelection()
+	})
+
 	// Load all apps
 	av.loadAllApps()
 
@@ -37,6 +42,11 @@ func NewAppsView(controller *Controller, app *tview.Application, root tview.Prim
 
 // GetWidget returns the tview primitive for this view
 func (av *AppsView) GetWidget() tview.Primitive {
+	return av.list
+}
+
+// GetList returns the underlying list widget (for centralized event handling)
+func (av *AppsView) GetList() *tview.List {
 	return av.list
 }
 

@@ -87,41 +87,37 @@ func (a *App) setupGlobalKeyHandlers() {
 			}
 		}
 
-		// Up/Down navigation - manually control list selection
-		if event.Key() == tcell.KeyUp {
-			currentIndex := a.appsView.list.GetCurrentItem()
-			if currentIndex > 0 {
-				newIndex := currentIndex - 1
-				a.app.QueueUpdate(func() {
-					a.appsView.list.SetCurrentItem(newIndex)
-					a.appsView.UpdateSelection()
-				})
+		// Up/Down navigation - forward to list, it will call SetChangedFunc callback
+		if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyDown {
+			currentFocus := a.app.GetFocus()
+			list := a.appsView.GetList()
+
+			// Only handle if focus is on the apps list
+			if currentFocus == list {
+				// Forward event to list - it will handle visually and call SetChangedFunc
+				// which will update our controller state via UpdateSelection()
+				return event
 			}
-			return nil // Consume event
+			return event
 		}
 
-		if event.Key() == tcell.KeyDown {
-			currentIndex := a.appsView.list.GetCurrentItem()
-			if currentIndex < a.appsView.list.GetItemCount()-1 {
-				newIndex := currentIndex + 1
-				a.app.QueueUpdate(func() {
-					a.appsView.list.SetCurrentItem(newIndex)
-					a.appsView.UpdateSelection()
-				})
-			}
-			return nil // Consume event
-		}
-
-		// Enter - manually trigger action
+		// Enter - forward to list first, then handle action
 		if event.Key() == tcell.KeyEnter {
-			selectedApp := a.appsView.GetSelected()
-			if selectedApp != nil {
-				logger.Log("Enter pressed, showing action menu for: %s", selectedApp.Name)
-				a.app.QueueUpdate(func() {
-					a.appsView.showActionMenu(selectedApp)
-				})
+			currentFocus := a.app.GetFocus()
+			list := a.appsView.GetList()
+
+			// Only handle if focus is on the apps list
+			if currentFocus == list {
+				selectedApp := a.appsView.GetSelected()
+				if selectedApp != nil {
+					logger.Log("Enter pressed, showing action menu for: %s", selectedApp.Name)
+					a.app.QueueUpdate(func() {
+						a.appsView.showActionMenu(selectedApp)
+					})
+				}
+				return nil // Consume event to prevent default list action
 			}
-			return nil // Consume event
+			return event
 		}
 
 		// All other events - forward to focused widget
