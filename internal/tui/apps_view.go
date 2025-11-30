@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"fmt"
 	"omarchy-tui/internal/config"
 	"omarchy-tui/internal/hypr"
 	"omarchy-tui/internal/logger"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/rivo/tview"
 )
 
@@ -117,9 +119,8 @@ func (av *AppsView) showActionMenu(app *config.Application) {
 
 			switch buttonLabel {
 			case "Set keybinding":
-				if err := hypr.AddKeybinding(app.Name, app.Keybinding); err != nil {
-					logger.Log("Failed to add keybinding: %v", err)
-				}
+				av.showKeybindingInput(app)
+				// Note: Don't restore root here, let showKeybindingInput handle it
 			case "Edit configuration":
 				av.controller.EnterEditMode(EditModeAppConfig)
 			}
@@ -130,4 +131,70 @@ func (av *AppsView) showActionMenu(app *config.Application) {
 	logger.Log("showActionMenu: Root set to modal, setting focus to modal")
 	av.app.SetFocus(modal)
 	logger.Log("showActionMenu: Focus set to modal, modal should now be visible")
+}
+
+// showKeybindingInput displays an input dialog for setting a keybinding
+func (av *AppsView) showKeybindingInput(app *config.Application) {
+	logger.Log("showKeybindingInput: Called for app: %s", app.Name)
+
+	// Create input field
+	inputField := tview.NewInputField().
+		SetLabel(fmt.Sprintf("Keybinding for %s: ", app.Name)).
+		SetText(app.Keybinding). // Pre-fill with current keybinding
+		SetFieldWidth(40)
+
+	// Set up done callback (must be after inputField is created)
+	inputField.SetDoneFunc(func(key tcell.Key) {
+		if key == tcell.KeyEnter {
+			keybinding := inputField.GetText()
+			if err := hypr.AddKeybinding(app.Name, keybinding); err != nil {
+				logger.Log("Failed to add keybinding: %v", err)
+			} else {
+				logger.Log("Keybinding saved: %s -> %s", app.Name, keybinding)
+			}
+			// Return to main view
+			av.app.SetRoot(av.root, true)
+			av.app.SetFocus(av.list)
+		} else if key == tcell.KeyEscape {
+			// Cancel, return to main view
+			logger.Log("Keybinding input cancelled")
+			av.app.SetRoot(av.root, true)
+			av.app.SetFocus(av.list)
+		}
+	})
+
+	// Create instructions text
+	instructions := tview.NewTextView().
+		SetText("Press Enter to save, Esc to cancel").
+		SetTextAlign(tview.AlignCenter).
+		SetDynamicColors(false)
+
+	// Create Flex container with border and title
+	dialog := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(tview.NewBox().SetBorder(false), 1, 0, false). // Spacer
+		AddItem(instructions, 1, 0, false).
+		AddItem(tview.NewBox().SetBorder(false), 1, 0, false). // Spacer
+		AddItem(inputField, 1, 0, true).                       // Input field (focusable)
+		AddItem(tview.NewBox().SetBorder(false), 1, 0, false)  // Spacer
+
+	dialog.SetBorder(true).
+		SetTitle(" Set Keybinding ").
+		SetTitleAlign(tview.AlignCenter)
+
+	// Create centered container
+	finalDialog := tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(tview.NewBox(), 0, 1, false).
+		AddItem(tview.NewFlex().
+			AddItem(tview.NewBox(), 0, 1, false).
+			AddItem(dialog, 50, 0, true).
+			AddItem(tview.NewBox(), 0, 1, false),
+			0, 1, true).
+		AddItem(tview.NewBox(), 0, 1, false)
+
+	logger.Log("showKeybindingInput: Setting root to input dialog")
+	av.app.SetRoot(finalDialog, true)
+	logger.Log("showKeybindingInput: Setting focus to input field")
+	av.app.SetFocus(inputField)
 }
