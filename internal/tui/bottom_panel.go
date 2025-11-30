@@ -76,7 +76,6 @@ func (bp *BottomPanel) UpdateAppInfo(app *config.Application, isDefault bool) {
 	text := fmt.Sprintf("[yellow]Application:[-] %s\n", app.Name)
 	text += fmt.Sprintf("[yellow]Package:[-] %s\n", app.PackageName)
 	text += fmt.Sprintf("[yellow]Category:[-] %s\n", app.Category)
-	text += fmt.Sprintf("[yellow]Keybinding:[-] %s\n", app.Keybinding)
 
 	if isDefault {
 		text += "\n[green]Status: Default app for category[-]\n"

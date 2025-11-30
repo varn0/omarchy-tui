@@ -73,7 +73,12 @@ func (av *AppsView) loadAllApps() {
 		if defaultApp != nil && app.PackageName == defaultApp.PackageName {
 			mainText = "* " + mainText
 		}
-		av.list.AddItem(mainText, "", 0, nil)
+		// Format secondary text with keybinding
+		secondaryText := "└─ NONE"
+		if app.Keybinding != "" {
+			secondaryText = fmt.Sprintf("└─ %s", app.Keybinding)
+		}
+		av.list.AddItem(mainText, secondaryText, 0, nil)
 	}
 
 	if len(av.apps) == 0 {
