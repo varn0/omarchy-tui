@@ -43,6 +43,12 @@ func LoadConfig() (*OmarchyConfig, error) {
 			AppsInventory: apps,
 		}
 
+		// Update keybindings from Hyprland config if available
+		if err := updateKeybindingsFromHypr(config); err != nil {
+			// Log but don't fail - keybindings are optional
+			// Could add logging here if logger is available
+		}
+
 		// Write the generated config
 		if err := writeConfig(configPath, config); err != nil {
 			return nil, fmt.Errorf("failed to write config file: %w", err)
