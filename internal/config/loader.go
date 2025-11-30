@@ -631,11 +631,9 @@ func extractAppNameFromCommand(command string) string {
 		// Remove file extensions if any
 		appName = strings.TrimSuffix(appName, ".sh")
 		appName = strings.TrimSuffix(appName, ".exe")
-		logger.Log("extractAppNameFromCommand: Extracted app name: %s", appName)
 		return appName
 	}
 
-	logger.Log("extractAppNameFromCommand: Returning command as-is: %s", command)
 	return command
 }
 
