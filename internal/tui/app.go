@@ -56,9 +56,9 @@ func NewApp(cfg *config.OmarchyConfig) (*App, error) {
 
 // setupLayout creates the two-panel layout using Flex
 func (a *App) setupLayout() {
-	// Root: App list (top) and bottom panel
+	// Root: App list (left) and side panel (right)
 	a.root = tview.NewFlex().
-		SetDirection(tview.FlexRow).
+		SetDirection(tview.FlexColumn).
 		AddItem(a.appsView.GetWidget(), 0, 3, true).
 		AddItem(a.bottomPanel.GetWidget(), 0, 1, false)
 

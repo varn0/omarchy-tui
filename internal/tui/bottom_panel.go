@@ -88,7 +88,7 @@ func (bp *BottomPanel) UpdateAppInfo(app *config.Application, isDefault bool) {
 	}
 
 	if len(app.CustomConfig) > 0 {
-		text += "\n[yellow]Custom Config:[-]\n"
+		text += "[yellow]Custom Config:[-]\n"
 		for k, v := range app.CustomConfig {
 			text += fmt.Sprintf("  %s: %s\n", k, v)
 		}
