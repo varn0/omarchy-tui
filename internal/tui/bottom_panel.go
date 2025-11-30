@@ -9,11 +9,11 @@ import (
 
 // BottomPanel manages the bottom information/configuration panel
 type BottomPanel struct {
-	textView  *tview.TextView
-	textArea  *tview.TextArea
-	container *tview.Flex
+	textView   *tview.TextView
+	textArea   *tview.TextArea
+	container  *tview.Flex
 	controller *Controller
-	mode      string // "info" or "config"
+	mode       string // "info" or "config"
 }
 
 // NewBottomPanel creates a new bottom panel
@@ -78,9 +78,9 @@ func (bp *BottomPanel) UpdateAppInfo(app *config.Application, isDefault bool) {
 	text += fmt.Sprintf("[yellow]Category:[-] %s\n", app.Category)
 
 	if isDefault {
-		text += "\n[green]Status: Default app for category[-]\n"
+		text += "[green]Status: Default app for category[-]\n"
 	} else {
-		text += "\n[yellow]Status: Not default[-]\n"
+		text += "[yellow]Status: Not default[-]\n"
 	}
 
 	if app.ConfigFile != "" {
@@ -127,4 +127,3 @@ func (bp *BottomPanel) Refresh() {
 		bp.updateInfo()
 	}
 }
-
