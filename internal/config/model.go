@@ -13,6 +13,7 @@ type Application struct {
 	Keybinding   string            `yaml:"keybinding"`
 	Category     string            `yaml:"category"`
 	ConfigFile   string            `yaml:"config_file,omitempty"`
+	Icon         string            `yaml:"icon,omitempty"`
 	CustomConfig map[string]string `yaml:"custom_config,omitempty"`
 }
 
@@ -42,4 +43,3 @@ func (c *OmarchyConfig) GetCategoryByID(categoryID string) *Category {
 	}
 	return nil
 }
-

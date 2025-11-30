@@ -321,10 +321,7 @@ func parseDesktopFile(filePath string) (*Application, string, error) {
 	app.PackageName = packageName
 	app.Category = category
 	app.Keybinding = "" // Will be empty for auto-generated apps
-
-	if icon != "" {
-		app.CustomConfig["icon"] = icon
-	}
+	app.Icon = icon
 
 	return app, categories, nil
 }
