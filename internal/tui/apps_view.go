@@ -2,6 +2,7 @@ package tui
 
 import (
 	"omarchy-tui/internal/config"
+	"omarchy-tui/internal/hypr"
 	"omarchy-tui/internal/logger"
 
 	"github.com/rivo/tview"
@@ -116,7 +117,9 @@ func (av *AppsView) showActionMenu(app *config.Application) {
 
 			switch buttonLabel {
 			case "Set keybinding":
-				av.controller.SetDefaultApp(app.Category, app)
+				if err := hypr.AddKeybinding(app.Name, app.Keybinding); err != nil {
+					logger.Log("Failed to add keybinding: %v", err)
+				}
 			case "Edit configuration":
 				av.controller.EnterEditMode(EditModeAppConfig)
 			}
