@@ -34,6 +34,14 @@ func NewAppsView(controller *Controller, app *tview.Application, root tview.Prim
 		av.UpdateSelection()
 	})
 
+	// Set up callback for when Enter is pressed on a list item
+	av.list.SetSelectedFunc(func(index int, mainText, secondaryText string, shortcut rune) {
+		if index >= 0 && index < len(av.apps) {
+			logger.Log("Enter pressed on list item, showing action menu for: %s", av.apps[index].Name)
+			av.showActionMenu(&av.apps[index])
+		}
+	})
+
 	// Load all apps
 	av.loadAllApps()
 
@@ -96,10 +104,13 @@ func (av *AppsView) UpdateSelection() {
 
 // showActionMenu displays a modal with action options
 func (av *AppsView) showActionMenu(app *config.Application) {
+	logger.Log("showActionMenu: Called for app: %s", app.Name)
+
 	modal := tview.NewModal().
 		SetText("Select action for " + app.Name).
 		AddButtons([]string{"Launch", "Set Default", "Configure", "Cancel"}).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
+			logger.Log("showActionMenu: Modal button pressed: %s (index: %d)", buttonLabel, buttonIndex)
 			av.app.SetRoot(av.root, true)
 			av.app.SetFocus(av.list)
 
@@ -114,6 +125,9 @@ func (av *AppsView) showActionMenu(app *config.Application) {
 			}
 		})
 
+	logger.Log("showActionMenu: Modal created, setting root to modal")
 	av.app.SetRoot(modal, true)
+	logger.Log("showActionMenu: Root set to modal, setting focus to modal")
 	av.app.SetFocus(modal)
+	logger.Log("showActionMenu: Focus set to modal, modal should now be visible")
 }

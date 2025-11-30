@@ -101,22 +101,10 @@ func (a *App) setupGlobalKeyHandlers() {
 			return event
 		}
 
-		// Enter - forward to list first, then handle action
+		// Enter - let the list widget handle it via SetSelectedFunc
+		// We don't consume it here, allowing the list to process Enter naturally
 		if event.Key() == tcell.KeyEnter {
-			currentFocus := a.app.GetFocus()
-			list := a.appsView.GetList()
-
-			// Only handle if focus is on the apps list
-			if currentFocus == list {
-				selectedApp := a.appsView.GetSelected()
-				if selectedApp != nil {
-					logger.Log("Enter pressed, showing action menu for: %s", selectedApp.Name)
-					a.app.QueueUpdate(func() {
-						a.appsView.showActionMenu(selectedApp)
-					})
-				}
-				return nil // Consume event to prevent default list action
-			}
+			// Just forward the event to the focused widget (list will handle it)
 			return event
 		}
 
