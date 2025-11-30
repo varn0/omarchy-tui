@@ -202,7 +202,7 @@ func scanDesktopFiles(homeDir string) ([]Application, []Category, error) {
 		}
 
 		// Parse desktop file
-		app, err := parseDesktopFile(filePath)
+		app, rawCategories, err := parseDesktopFile(filePath)
 		if err != nil {
 			// Skip invalid desktop files, continue with others
 			continue
@@ -211,7 +211,15 @@ func scanDesktopFiles(homeDir string) ([]Application, []Category, error) {
 		if app != nil {
 			apps = append(apps, *app)
 
-			// Track categories
+			// Extract all categories from the Categories field
+			allCategories := extractAllCategories(rawCategories)
+			for _, categoryID := range allCategories {
+				if _, exists := categoryMap[categoryID]; !exists {
+					categoryMap[categoryID] = formatCategoryName(categoryID)
+				}
+			}
+
+			// Also track the app's assigned category (for backward compatibility)
 			if app.Category != "" {
 				if _, exists := categoryMap[app.Category]; !exists {
 					categoryMap[app.Category] = formatCategoryName(app.Category)
@@ -232,11 +240,11 @@ func scanDesktopFiles(homeDir string) ([]Application, []Category, error) {
 	return apps, categories, nil
 }
 
-// parseDesktopFile parses a .desktop file and returns an Application
-func parseDesktopFile(filePath string) (*Application, error) {
+// parseDesktopFile parses a .desktop file and returns an Application and the raw Categories string
+func parseDesktopFile(filePath string) (*Application, string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer file.Close()
 
@@ -292,18 +300,18 @@ func parseDesktopFile(filePath string) (*Application, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
 	// Validate required fields
 	if name == "" || exec == "" {
-		return nil, fmt.Errorf("missing required fields in desktop file")
+		return nil, "", fmt.Errorf("missing required fields in desktop file")
 	}
 
 	// Extract executable name from Exec field
 	packageName := extractExecutableName(exec)
 	if packageName == "" {
-		return nil, fmt.Errorf("could not extract executable name from Exec field")
+		return nil, "", fmt.Errorf("could not extract executable name from Exec field")
 	}
 
 	// Determine category from Categories field
@@ -318,7 +326,7 @@ func parseDesktopFile(filePath string) (*Application, error) {
 		app.CustomConfig["icon"] = icon
 	}
 
-	return app, nil
+	return app, categories, nil
 }
 
 // extractExecutableName extracts the base command name from Exec field
@@ -358,6 +366,40 @@ func extractExecutableName(execLine string) string {
 	cmd = filepath.Base(cmd)
 
 	return cmd
+}
+
+// extractAllCategories extracts all categories from a semicolon-separated Categories string
+// Returns a slice of normalized category IDs (lowercase, trimmed)
+func extractAllCategories(categories string) []string {
+	if categories == "" {
+		return []string{}
+	}
+
+	// Split by semicolon
+	parts := strings.Split(categories, ";")
+	var categoryIDs []string
+	seen := make(map[string]bool)
+
+	for _, part := range parts {
+		// Trim whitespace
+		category := strings.TrimSpace(part)
+
+		// Skip empty categories
+		if category == "" {
+			continue
+		}
+
+		// Normalize to lowercase
+		category = strings.ToLower(category)
+
+		// Avoid duplicates
+		if !seen[category] {
+			categoryIDs = append(categoryIDs, category)
+			seen[category] = true
+		}
+	}
+
+	return categoryIDs
 }
 
 // determineCategory maps desktop file Categories to omarchy category ID
