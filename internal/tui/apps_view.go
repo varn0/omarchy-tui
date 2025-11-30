@@ -108,19 +108,16 @@ func (av *AppsView) showActionMenu(app *config.Application) {
 
 	modal := tview.NewModal().
 		SetText("Select action for " + app.Name).
-		AddButtons([]string{"Launch", "Set Default", "Configure", "Cancel"}).
+		AddButtons([]string{"Set keybinding", "Edit configuration", "Cancel"}).
 		SetDoneFunc(func(buttonIndex int, buttonLabel string) {
 			logger.Log("showActionMenu: Modal button pressed: %s (index: %d)", buttonLabel, buttonIndex)
 			av.app.SetRoot(av.root, true)
 			av.app.SetFocus(av.list)
 
 			switch buttonLabel {
-			case "Launch":
-				av.controller.LaunchApp(app)
-			case "Set Default":
+			case "Set keybinding":
 				av.controller.SetDefaultApp(app.Category, app)
-				av.loadAllApps() // Refresh list
-			case "Configure":
+			case "Edit configuration":
 				av.controller.EnterEditMode(EditModeAppConfig)
 			}
 		})
