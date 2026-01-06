@@ -157,78 +157,107 @@ func isConfigEmpty(configPath string) (bool, error) {
 	return trimmed == "" || trimmed == "{}" || trimmed == "---", nil
 }
 
-// scanDesktopFiles scans $HOME/.local/share/applications for .desktop files
+// getXDGDataDirs returns all XDG data directories to search for .desktop files
+func getXDGDataDirs(homeDir string) []string {
+	var dirs []string
+
+	// User-specific directory (highest priority)
+	userDir := filepath.Join(homeDir, ".local", "share", "applications")
+	dirs = append(dirs, userDir)
+
+	// Get XDG_DATA_DIRS or use default
+	xdgDataDirs := os.Getenv("XDG_DATA_DIRS")
+	if xdgDataDirs == "" {
+		// Default per XDG spec
+		xdgDataDirs = "/usr/local/share:/usr/share"
+	}
+
+	// Add applications subdirectory for each XDG data dir
+	for _, dir := range strings.Split(xdgDataDirs, ":") {
+		dir = strings.TrimSpace(dir)
+		if dir != "" {
+			dirs = append(dirs, filepath.Join(dir, "applications"))
+		}
+	}
+
+	return dirs
+}
+
+// scanDesktopFiles scans all XDG data directories for .desktop files
 func scanDesktopFiles(homeDir string) ([]Application, []Category, error) {
-	desktopDir := filepath.Join(homeDir, ".local", "share", "applications")
-
-	// Check if directory exists
-	if _, err := os.Stat(desktopDir); os.IsNotExist(err) {
-		// Return empty config if directory doesn't exist
-		return []Application{}, []Category{}, nil
-	}
-
-	// Read directory
-	entries, err := os.ReadDir(desktopDir)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to read desktop directory: %w", err)
-	}
+	dirs := getXDGDataDirs(homeDir)
 
 	var apps []Application
 	categoryMap := make(map[string]string) // category ID -> category name
+	seenApps := make(map[string]bool)      // track by desktop file name to avoid duplicates
 
-	// Process each .desktop file
-	for _, entry := range entries {
-		if entry.IsDir() {
+	// Process directories in order (user dir first, so user apps take priority)
+	for _, desktopDir := range dirs {
+		// Check if directory exists
+		if _, err := os.Stat(desktopDir); os.IsNotExist(err) {
 			continue
 		}
 
-		if !strings.HasSuffix(entry.Name(), ".desktop") {
-			continue
-		}
-
-		filePath := filepath.Join(desktopDir, entry.Name())
-
-		// Check file info for permissions
-		info, err := entry.Info()
+		// Read directory
+		entries, err := os.ReadDir(desktopDir)
 		if err != nil {
+			// Log but continue with other directories
+			logger.Log("scanDesktopFiles: failed to read directory %s: %v", desktopDir, err)
 			continue
 		}
 
-		// Check if file is a regular file (not a directory or symlink)
-		mode := info.Mode()
-		if !mode.IsRegular() {
-			continue
-		}
-
-		// Check if file has execution permissions (as per spec requirement)
-		// Note: Most .desktop files are not executable, but we check as specified
-		// If no executable files are found, this will result in empty config
-		if mode&0111 == 0 {
-			continue
-		}
-
-		// Parse desktop file
-		app, rawCategories, err := parseDesktopFile(filePath)
-		if err != nil {
-			// Skip invalid desktop files, continue with others
-			continue
-		}
-
-		if app != nil {
-			apps = append(apps, *app)
-
-			// Extract all categories from the Categories field
-			allCategories := extractAllCategories(rawCategories)
-			for _, categoryID := range allCategories {
-				if _, exists := categoryMap[categoryID]; !exists {
-					categoryMap[categoryID] = formatCategoryName(categoryID)
-				}
+		// Process each .desktop file
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
 			}
 
-			// Also track the app's assigned category (for backward compatibility)
-			if app.Category != "" {
-				if _, exists := categoryMap[app.Category]; !exists {
-					categoryMap[app.Category] = formatCategoryName(app.Category)
+			if !strings.HasSuffix(entry.Name(), ".desktop") {
+				continue
+			}
+
+			// Skip if we've already processed a file with this name (user overrides system)
+			if seenApps[entry.Name()] {
+				continue
+			}
+
+			filePath := filepath.Join(desktopDir, entry.Name())
+
+			// Check file info
+			info, err := entry.Info()
+			if err != nil {
+				continue
+			}
+
+			// Check if file is a regular file (not a directory or symlink)
+			if !info.Mode().IsRegular() {
+				continue
+			}
+
+			// Parse desktop file
+			app, rawCategories, err := parseDesktopFile(filePath)
+			if err != nil {
+				// Skip invalid desktop files, continue with others
+				continue
+			}
+
+			if app != nil {
+				seenApps[entry.Name()] = true
+				apps = append(apps, *app)
+
+				// Extract all categories from the Categories field
+				allCategories := extractAllCategories(rawCategories)
+				for _, categoryID := range allCategories {
+					if _, exists := categoryMap[categoryID]; !exists {
+						categoryMap[categoryID] = formatCategoryName(categoryID)
+					}
+				}
+
+				// Also track the app's assigned category (for backward compatibility)
+				if app.Category != "" {
+					if _, exists := categoryMap[app.Category]; !exists {
+						categoryMap[app.Category] = formatCategoryName(app.Category)
+					}
 				}
 			}
 		}
@@ -243,10 +272,12 @@ func scanDesktopFiles(homeDir string) ([]Application, []Category, error) {
 		})
 	}
 
+	logger.Log("scanDesktopFiles: found %d applications across %d directories", len(apps), len(dirs))
 	return apps, categories, nil
 }
 
 // parseDesktopFile parses a .desktop file and returns an Application and the raw Categories string
+// Returns nil if the entry should not be displayed (NoDisplay=true, Hidden=true, or Type!=Application)
 func parseDesktopFile(filePath string) (*Application, string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -260,7 +291,8 @@ func parseDesktopFile(filePath string) (*Application, string, error) {
 		CustomConfig: make(map[string]string),
 	}
 
-	var name, exec, categories, icon string
+	var name, exec, categories, icon, entryType string
+	var noDisplay, hidden bool
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -302,11 +334,30 @@ func parseDesktopFile(filePath string) (*Application, string, error) {
 			categories = value
 		case "Icon":
 			icon = value
+		case "Type":
+			entryType = value
+		case "NoDisplay":
+			noDisplay = strings.ToLower(value) == "true"
+		case "Hidden":
+			hidden = strings.ToLower(value) == "true"
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
 		return nil, "", err
+	}
+
+	// Filter: must be Type=Application (or empty, which defaults to Application)
+	if entryType != "" && entryType != "Application" {
+		return nil, "", fmt.Errorf("not an Application type: %s", entryType)
+	}
+
+	// Filter: skip entries marked as NoDisplay or Hidden
+	if noDisplay {
+		return nil, "", fmt.Errorf("entry has NoDisplay=true")
+	}
+	if hidden {
+		return nil, "", fmt.Errorf("entry has Hidden=true")
 	}
 
 	// Validate required fields

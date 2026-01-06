@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"omarchy-tui/internal/config"
 	"omarchy-tui/internal/exec"
 	"omarchy-tui/internal/logger"
@@ -112,6 +113,42 @@ func (c *Controller) GetEditMode() EditMode {
 // GetConfig returns the configuration
 func (c *Controller) GetConfig() *config.OmarchyConfig {
 	return c.config
+}
+
+// ReloadConfig reloads the configuration from disk and updates the controller's config
+// It preserves the currently selected app if it still exists after reload
+func (c *Controller) ReloadConfig() error {
+	// Store current selection info to preserve it
+	var selectedAppName string
+	var selectedAppPackage string
+	if c.selectedApp != nil {
+		selectedAppName = c.selectedApp.Name
+		selectedAppPackage = c.selectedApp.PackageName
+	}
+
+	// Load config from disk
+	newConfig, err := config.LoadConfig()
+	if err != nil {
+		return fmt.Errorf("failed to reload config: %w", err)
+	}
+
+	// Update controller's config
+	c.config = newConfig
+
+	// Restore selection if the app still exists
+	if selectedAppName != "" {
+		for i := range c.config.AppsInventory {
+			app := &c.config.AppsInventory[i]
+			if app.Name == selectedAppName && app.PackageName == selectedAppPackage {
+				c.selectedApp = app
+				logger.Log("ReloadConfig: Preserved selection for app: %s", app.Name)
+				break
+			}
+		}
+	}
+
+	logger.Log("ReloadConfig: Configuration reloaded successfully")
+	return nil
 }
 
 // notifyStateChange calls the state change callback

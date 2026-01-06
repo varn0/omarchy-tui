@@ -156,6 +156,25 @@ func (av *AppsView) showKeybindingInput(app *config.Application) {
 				logger.Log("Failed to add keybinding: %v", err)
 			} else {
 				logger.Log("Keybinding saved: %s -> %s", app.Name, keybinding)
+				// Store current selection index before reload
+				currentIndex := av.list.GetCurrentItem()
+
+				// Reload config from disk
+				if err := av.controller.ReloadConfig(); err != nil {
+					logger.Log("Failed to reload config: %v", err)
+				}
+
+				// Refresh apps list to show updated keybinding
+				av.loadAllApps()
+
+				// Restore selection if still valid
+				if currentIndex >= 0 && currentIndex < len(av.apps) {
+					av.list.SetCurrentItem(currentIndex)
+					// Update controller selection
+					if currentIndex < len(av.apps) {
+						av.controller.SetSelectedAppSilent(&av.apps[currentIndex])
+					}
+				}
 			}
 			// Return to main view
 			av.app.SetRoot(av.root, true)
@@ -193,7 +212,7 @@ func (av *AppsView) showKeybindingInput(app *config.Application) {
 		AddItem(tview.NewBox(), 0, 1, false).
 		AddItem(tview.NewFlex().
 			AddItem(tview.NewBox(), 0, 1, false).
-			AddItem(dialog, 50, 0, true).
+			AddItem(dialog, 90, 0, true).
 			AddItem(tview.NewBox(), 0, 1, false),
 			0, 1, true).
 		AddItem(tview.NewBox(), 0, 1, false)
