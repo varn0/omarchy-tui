@@ -125,8 +125,10 @@ func updateOmarchyConfig(appName, keybinding string) error {
 	return nil
 }
 
-// AddKeybinding updates a keybinding in hyprland bindings.conf and omarchy.conf.yaml
-func AddKeybinding(appName, keybinding string) error {
+// AddKeybinding adds or updates a keybinding in hyprland bindings.conf and omarchy.conf.yaml
+// If a binding already exists for the app, it comments out the old one and adds a new one.
+// If no binding exists, it creates a new one using the packageName as the command.
+func AddKeybinding(appName, packageName, keybinding string) error {
 	hyprPath, err := expandPath("~/.config/hypr/bindings.conf")
 	if err != nil {
 		return fmt.Errorf("failed to expand hypr config path: %w", err)
@@ -155,20 +157,6 @@ func AddKeybinding(appName, keybinding string) error {
 	}
 	file.Close()
 
-	// Find original bindd line
-	originalLine, lineIndex, found := findOriginalBindLine(lines, appName)
-	if !found {
-		return fmt.Errorf("bindd line for app '%s' not found in bindings.conf", appName)
-	}
-
-	logger.Log("AddKeybinding: Found original line at index %d: %s", lineIndex, originalLine)
-
-	// Parse original line to extract label and command
-	_, _, label, command, err := parseBinddLine(originalLine)
-	if err != nil {
-		return fmt.Errorf("failed to parse original bindd line: %w", err)
-	}
-
 	// Parse new keybinding (format: "MODIFIERS, KEY")
 	keybindingParts := strings.Split(keybinding, ",")
 	if len(keybindingParts) != 2 {
@@ -177,9 +165,28 @@ func AddKeybinding(appName, keybinding string) error {
 	newModifiers := strings.TrimSpace(keybindingParts[0])
 	newKey := strings.TrimSpace(keybindingParts[1])
 
-	// Comment out original line
-	lines[lineIndex] = "# " + lines[lineIndex]
-	logger.Log("AddKeybinding: Commented out original line")
+	// Find original bindd line (if exists)
+	originalLine, lineIndex, found := findOriginalBindLine(lines, appName)
+
+	var label, command string
+	if found {
+		logger.Log("AddKeybinding: Found existing binding at index %d: %s", lineIndex, originalLine)
+
+		// Parse original line to extract label and command
+		_, _, label, command, err = parseBinddLine(originalLine)
+		if err != nil {
+			return fmt.Errorf("failed to parse original bindd line: %w", err)
+		}
+
+		// Comment out original line
+		lines[lineIndex] = "# " + lines[lineIndex]
+		logger.Log("AddKeybinding: Commented out original line")
+	} else {
+		// No existing binding - create new one
+		logger.Log("AddKeybinding: No existing binding found for '%s', creating new one", appName)
+		label = appName
+		command = packageName
+	}
 
 	// Check if "# OVERRIDES" section exists
 	hasOverrides := false

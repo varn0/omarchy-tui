@@ -150,7 +150,7 @@ func (av *AppsView) showKeybindingInput(app *config.Application) {
 	inputField.SetDoneFunc(func(key tcell.Key) {
 		if key == tcell.KeyEnter {
 			keybinding := inputField.GetText()
-			if err := hypr.AddKeybinding(app.Name, keybinding); err != nil {
+			if err := hypr.AddKeybinding(app.Name, app.PackageName, keybinding); err != nil {
 				logger.Log("Failed to add keybinding: %v", err)
 			} else {
 				logger.Log("Keybinding saved: %s -> %s", app.Name, keybinding)
