@@ -8,59 +8,89 @@ import (
 	"github.com/rivo/tview"
 )
 
+// FocusedPanel represents which panel currently has focus
+type FocusedPanel int
+
+const (
+	FocusPanelCategories FocusedPanel = iota
+	FocusPanelApps
+)
+
 // App represents the root TUI application
 type App struct {
-	app         *tview.Application
-	controller  *Controller
-	appsView    *AppsView
-	bottomPanel *BottomPanel
-	root        *tview.Flex
+	app            *tview.Application
+	controller     *Controller
+	categoriesView *CategoriesView
+	appsView       *AppsView
+	bottomPanel    *BottomPanel
+	root           *tview.Flex
+	focusedPanel   FocusedPanel
 }
 
 // NewApp creates a new TUI application instance
 func NewApp(cfg *config.OmarchyConfig) (*App, error) {
-	app := &App{
-		app: tview.NewApplication(),
+	a := &App{
+		app:          tview.NewApplication(),
+		focusedPanel: FocusPanelCategories,
 	}
 
 	// Create controller
-	app.controller = NewController(cfg)
+	a.controller = NewController(cfg)
 
 	// Create temporary root for apps view
 	tempRoot := tview.NewBox()
 
 	// Create views
-	app.appsView = NewAppsView(app.controller, app.app, tempRoot)
-	app.bottomPanel = NewBottomPanel(app.controller)
+	a.categoriesView = NewCategoriesView(a.controller, func(categoryID string) {
+		a.onCategoryChange(categoryID)
+	})
+	a.appsView = NewAppsView(a.controller, a.app, tempRoot)
+	a.bottomPanel = NewBottomPanel(a.controller)
 
 	// Set up layout
-	app.setupLayout()
+	a.setupLayout()
 
 	// Update apps view with real root
-	app.appsView.root = app.root
+	a.appsView.root = a.root
 
 	// Register state change callback after all views are created
-	app.controller.SetStateChangeCallback(func() {
+	a.controller.SetStateChangeCallback(func() {
 		logger.Log("State change detected, updating views")
-		app.updateViews()
+		a.updateViews()
 	})
 
 	// Set up global key handlers (must be after setupLayout)
-	app.setupGlobalKeyHandlers()
+	a.setupGlobalKeyHandlers()
+
+	// Initial load of apps (all apps since "All" is selected by default)
+	a.appsView.LoadApps(a.controller.GetFilteredApps())
 
 	// Initial update
-	app.updateViews()
+	a.updateViews()
 
-	return app, nil
+	return a, nil
 }
 
-// setupLayout creates the two-panel layout using Flex
+// setupLayout creates the 3-panel layout using nested Flex containers
+// Layout:
+//   ┌─────────────┬──────────────────────┐
+//   │ Categories  │ Applications         │
+//   │             │                      │
+//   ├─────────────┴──────────────────────┤
+//   │ Information                        │
+//   └────────────────────────────────────┘
 func (a *App) setupLayout() {
-	// Root: App list (left) and side panel (right)
-	a.root = tview.NewFlex().
+	// Top section: Categories (left) | Apps (right)
+	topSection := tview.NewFlex().
 		SetDirection(tview.FlexColumn).
-		AddItem(a.appsView.GetWidget(), 0, 3, true).
-		AddItem(a.bottomPanel.GetWidget(), 0, 1, false)
+		AddItem(a.categoriesView.GetWidget(), 0, 1, true). // Categories: 1 proportion
+		AddItem(a.appsView.GetWidget(), 0, 3, false)       // Apps: 3 proportions
+
+	// Root: Top section (top) | Bottom panel (bottom)
+	a.root = tview.NewFlex().
+		SetDirection(tview.FlexRow).
+		AddItem(topSection, 0, 3, true).              // Top: 3 proportions
+		AddItem(a.bottomPanel.GetWidget(), 0, 1, false) // Bottom: 1 proportion
 
 	a.app.SetRoot(a.root, true)
 }
@@ -87,17 +117,28 @@ func (a *App) setupGlobalKeyHandlers() {
 			}
 		}
 
-		// Up/Down navigation - forward to list, it will call SetChangedFunc callback
-		if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyDown {
-			currentFocus := a.app.GetFocus()
-			list := a.appsView.GetList()
-
-			// Only handle if focus is on the apps list
-			if currentFocus == list {
-				// Forward event to list - it will handle visually and call SetChangedFunc
-				// which will update our controller state via UpdateSelection()
-				return event
+		// Left/Right navigation between panels
+		if event.Key() == tcell.KeyLeft {
+			if a.focusedPanel != FocusPanelCategories {
+				a.focusedPanel = FocusPanelCategories
+				a.app.SetFocus(a.categoriesView.GetList())
+				logger.Log("Focus switched to Categories panel")
 			}
+			return nil
+		}
+
+		if event.Key() == tcell.KeyRight {
+			if a.focusedPanel != FocusPanelApps {
+				a.focusedPanel = FocusPanelApps
+				a.app.SetFocus(a.appsView.GetList())
+				logger.Log("Focus switched to Apps panel")
+			}
+			return nil
+		}
+
+		// Up/Down navigation - forward to the focused list
+		if event.Key() == tcell.KeyUp || event.Key() == tcell.KeyDown {
+			// Forward to whichever list has focus
 			return event
 		}
 
@@ -111,6 +152,14 @@ func (a *App) setupGlobalKeyHandlers() {
 		// All other events - forward to focused widget
 		return event
 	})
+}
+
+// onCategoryChange handles category selection changes
+func (a *App) onCategoryChange(categoryID string) {
+	logger.Log("Category changed to: %s", categoryID)
+	a.controller.SelectCategory(categoryID)
+	a.appsView.LoadApps(a.controller.GetFilteredApps())
+	a.bottomPanel.Refresh()
 }
 
 // updateViews updates all views based on controller state
@@ -129,8 +178,9 @@ func (a *App) updateViews() {
 
 // Run starts the application event loop
 func (a *App) Run() error {
-	// Set initial focus to apps list
+	// Set initial focus to categories list
 	logger.Log("Starting TUI event loop")
-	a.app.SetFocus(a.appsView.GetWidget())
+	a.focusedPanel = FocusPanelCategories
+	a.app.SetFocus(a.categoriesView.GetList())
 	return a.app.Run()
 }

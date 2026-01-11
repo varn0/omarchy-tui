@@ -235,7 +235,7 @@ func scanDesktopFiles(homeDir string) ([]Application, []Category, error) {
 			}
 
 			// Parse desktop file
-			app, rawCategories, err := parseDesktopFile(filePath)
+			app, _, err := parseDesktopFile(filePath)
 			if err != nil {
 				// Skip invalid desktop files, continue with others
 				continue
@@ -245,15 +245,7 @@ func scanDesktopFiles(homeDir string) ([]Application, []Category, error) {
 				seenApps[entry.Name()] = true
 				apps = append(apps, *app)
 
-				// Extract all categories from the Categories field
-				allCategories := extractAllCategories(rawCategories)
-				for _, categoryID := range allCategories {
-					if _, exists := categoryMap[categoryID]; !exists {
-						categoryMap[categoryID] = formatCategoryName(categoryID)
-					}
-				}
-
-				// Also track the app's assigned category (for backward compatibility)
+				// Track the app's consolidated category
 				if app.Category != "" {
 					if _, exists := categoryMap[app.Category]; !exists {
 						categoryMap[app.Category] = formatCategoryName(app.Category)
@@ -423,7 +415,7 @@ func extractExecutableName(execLine string) string {
 }
 
 // extractAllCategories extracts all categories from a semicolon-separated Categories string
-// Returns a slice of normalized category IDs (lowercase, trimmed)
+// Returns a slice of normalized category IDs (lowercase, trimmed), excluding vendor-specific ones
 func extractAllCategories(categories string) []string {
 	if categories == "" {
 		return []string{}
@@ -446,6 +438,11 @@ func extractAllCategories(categories string) []string {
 		// Normalize to lowercase
 		category = strings.ToLower(category)
 
+		// Skip excluded categories
+		if isCategoryExcluded(category) {
+			continue
+		}
+
 		// Avoid duplicates
 		if !seen[category] {
 			categoryIDs = append(categoryIDs, category)
@@ -456,74 +453,157 @@ func extractAllCategories(categories string) []string {
 	return categoryIDs
 }
 
+// excludedCategoryPrefixes contains prefixes for categories to exclude (vendor-specific)
+var excludedCategoryPrefixes = []string{
+	"x-",      // Vendor-specific extensions (X-GNOME, X-KDE, etc.)
+}
+
+// excludedCategories contains specific categories to exclude
+var excludedCategories = map[string]bool{
+	"qt":              true, // Qt settings, not a real app category
+	"gtk":             true, // GTK settings
+	"gnome":           true, // GNOME-specific
+	"kde":             true, // KDE-specific
+	"xfce":            true, // XFCE-specific
+	"lxde":            true, // LXDE-specific
+	"lxqt":            true, // LXQt-specific
+	"mate":            true, // MATE-specific
+	"cinnamon":        true, // Cinnamon-specific
+	"pantheon":        true, // Pantheon-specific
+	"core":            true, // Generic, not useful
+	"documentation":   true, // Usually not launchable apps
+	"screensaver":     true, // Screensavers
+	"accessibility":   true, // Usually system settings, not apps
+	"desktopsettings": true, // Desktop settings
+}
+
+// isCategoryExcluded checks if a category should be excluded
+func isCategoryExcluded(category string) bool {
+	category = strings.ToLower(category)
+
+	// Check exact matches
+	if excludedCategories[category] {
+		return true
+	}
+
+	// Check prefixes
+	for _, prefix := range excludedCategoryPrefixes {
+		if strings.HasPrefix(category, prefix) {
+			return true
+		}
+	}
+
+	return false
+}
+
 // determineCategory maps desktop file Categories to omarchy category ID
+// Returns the first non-excluded category found
 func determineCategory(categories string) string {
 	if categories == "" {
 		return "other"
 	}
 
-	// Categories are semicolon-separated, take the first one
+	// Categories are semicolon-separated
 	parts := strings.Split(categories, ";")
-	if len(parts) == 0 {
-		return "other"
+
+	// Find the first valid (non-excluded) category
+	for _, part := range parts {
+		cat := strings.TrimSpace(part)
+		if cat == "" {
+			continue
+		}
+
+		catLower := strings.ToLower(cat)
+
+		// Skip excluded categories
+		if isCategoryExcluded(catLower) {
+			continue
+		}
+
+		// Map common desktop categories to normalized IDs
+		categoryMap := map[string]string{
+			// Audio/Video consolidation
+			"audiovideo":        "audiovideo",
+			"audio":             "audiovideo",
+			"video":             "audiovideo",
+			"music":             "audiovideo",
+			"player":            "audiovideo",
+			"recorder":          "audiovideo",
+			"audiovideoediting": "audiovideo",
+			// Graphics consolidation
+			"graphics":       "graphics",
+			"2dgraphics":     "graphics",
+			"rastergraphics": "graphics",
+			"vectorgraphics": "graphics",
+			// System consolidation
+			"system":           "system",
+			"settings":         "system",
+			"preferences":      "system",
+			"hardwaresettings": "system",
+			"monitor":          "system",
+			"terminalemulator": "system",
+			// Utility consolidation
+			"utility":    "utility",
+			"texteditor": "utility",
+			"calculator": "utility",
+			"viewer":     "utility",
+			// Office
+			"office":        "office",
+			"wordprocessor": "office",
+			// Network
+			"network":      "network",
+			"webbrowser":   "network",
+			"filetransfer": "network",
+			"maps":         "network",
+			// Other categories
+			"development": "development",
+			"game":        "game",
+			"games":       "game",
+			"education":   "education",
+			"science":     "science",
+			"printing":    "utility",
+			"security":    "system",
+		}
+
+		if mapped, ok := categoryMap[catLower]; ok {
+			return mapped
+		}
+
+		// Use the category as-is (lowercase)
+		return catLower
 	}
 
-	firstCategory := strings.TrimSpace(parts[0])
-	if firstCategory == "" {
-		return "other"
-	}
+	// All categories were excluded, default to "other"
+	return "other"
+}
 
-	// Map common desktop categories to lowercase IDs
-	firstCategory = strings.ToLower(firstCategory)
-
-	// Common desktop categories
-	categoryMap := map[string]string{
-		"audiovideo":  "audiovideo",
-		"audio":       "audiovideo",
-		"video":       "audiovideo",
-		"development": "development",
-		"graphics":    "graphics",
-		"network":     "network",
-		"office":      "office",
-		"system":      "system",
-		"utility":     "utility",
-		"game":        "game",
-		"games":       "game",
-		"education":   "education",
-		"science":     "science",
-		"settings":    "system",
-		"preferences": "system",
-	}
-
-	if mapped, ok := categoryMap[firstCategory]; ok {
-		return mapped
-	}
-
-	// Use the category as-is (lowercase)
-	return firstCategory
+// categoryDisplayNames maps category IDs to proper display names
+var categoryDisplayNames = map[string]string{
+	"audiovideo":  "Audio & Video",
+	"graphics":    "Graphics",
+	"system":      "System",
+	"utility":     "Utility",
+	"office":      "Office",
+	"network":     "Network",
+	"development": "Development",
+	"game":        "Game",
+	"education":   "Education",
+	"science":     "Science",
+	"other":       "Other",
 }
 
 // formatCategoryName formats a category ID into a display name
 func formatCategoryName(categoryID string) string {
-	// Capitalize first letter and add spaces before capitals
-	parts := strings.Split(categoryID, "")
-	if len(parts) == 0 {
+	// Check for known display name
+	if displayName, ok := categoryDisplayNames[categoryID]; ok {
+		return displayName
+	}
+
+	// Fallback: capitalize first letter
+	if len(categoryID) == 0 {
 		return categoryID
 	}
-
-	parts[0] = strings.ToUpper(parts[0])
-	result := strings.Join(parts, "")
-
-	// Add space before capital letters (except first)
-	var formatted strings.Builder
-	for i, r := range result {
-		if i > 0 && r >= 'A' && r <= 'Z' {
-			formatted.WriteRune(' ')
-		}
-		formatted.WriteRune(r)
-	}
-
-	return formatted.String()
+	return strings.ToUpper(categoryID[:1]) + categoryID[1:]
 }
 
 // writeConfig writes the configuration to a YAML file

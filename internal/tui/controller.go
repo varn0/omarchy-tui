@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"omarchy-tui/internal/config"
 	"omarchy-tui/internal/exec"
 	"omarchy-tui/internal/logger"
@@ -18,11 +17,12 @@ const (
 
 // Controller manages application state and coordinates between views
 type Controller struct {
-	config        *config.OmarchyConfig
-	selectedApp   *config.Application
-	defaultApps   map[string]*config.Application // categoryID -> app
-	editMode      EditMode
-	onStateChange func() // callback for view updates
+	config           *config.OmarchyConfig
+	selectedApp      *config.Application
+	selectedCategory string                         // "" means "All"
+	defaultApps      map[string]*config.Application // categoryID -> app
+	editMode         EditMode
+	onStateChange    func() // callback for view updates
 }
 
 // NewController creates a new controller instance
@@ -64,6 +64,32 @@ func (c *Controller) GetSelectedApp() *config.Application {
 // GetAllApps returns all applications from the configuration
 func (c *Controller) GetAllApps() []config.Application {
 	return c.config.AppsInventory
+}
+
+// SelectCategory sets the selected category and triggers state change
+func (c *Controller) SelectCategory(categoryID string) {
+	logger.Log("Controller: Selecting category: %s", categoryID)
+	c.selectedCategory = categoryID
+	c.notifyStateChange()
+}
+
+// GetSelectedCategory returns the currently selected category ID ("" means All)
+func (c *Controller) GetSelectedCategory() string {
+	return c.selectedCategory
+}
+
+// GetFilteredApps returns apps filtered by the selected category
+// If selectedCategory is "" (All), returns all apps
+func (c *Controller) GetFilteredApps() []config.Application {
+	if c.selectedCategory == "" {
+		return c.config.AppsInventory
+	}
+	return c.config.GetAppsByCategory(c.selectedCategory)
+}
+
+// GetCategories returns all categories from the configuration
+func (c *Controller) GetCategories() []config.Category {
+	return c.config.Categories
 }
 
 // SetDefaultApp sets the default app for a category
@@ -116,7 +142,6 @@ func (c *Controller) GetConfig() *config.OmarchyConfig {
 }
 
 // ReloadConfig reloads the configuration from disk and updates the controller's config
-// It preserves the currently selected app if it still exists after reload
 func (c *Controller) ReloadConfig() error {
 	// Store current selection info to preserve it
 	var selectedAppName string
@@ -129,7 +154,7 @@ func (c *Controller) ReloadConfig() error {
 	// Load config from disk
 	newConfig, err := config.LoadConfig()
 	if err != nil {
-		return fmt.Errorf("failed to reload config: %w", err)
+		return err
 	}
 
 	// Update controller's config

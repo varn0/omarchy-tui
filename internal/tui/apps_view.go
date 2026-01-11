@@ -20,6 +20,7 @@ type AppsView struct {
 }
 
 // NewAppsView creates a new apps view
+// Note: Call LoadApps() after creation to populate the list
 func NewAppsView(controller *Controller, app *tview.Application, root tview.Primitive) *AppsView {
 	av := &AppsView{
 		list:       tview.NewList(),
@@ -45,9 +46,6 @@ func NewAppsView(controller *Controller, app *tview.Application, root tview.Prim
 		}
 	})
 
-	// Load all apps
-	av.loadAllApps()
-
 	return av
 }
 
@@ -61,9 +59,9 @@ func (av *AppsView) GetList() *tview.List {
 	return av.list
 }
 
-// loadAllApps loads all apps from the configuration into the list
-func (av *AppsView) loadAllApps() {
-	av.apps = av.controller.GetAllApps()
+// LoadApps loads the provided apps into the list
+func (av *AppsView) LoadApps(apps []config.Application) {
+	av.apps = apps
 	av.list.Clear()
 
 	for _, app := range av.apps {
@@ -164,8 +162,8 @@ func (av *AppsView) showKeybindingInput(app *config.Application) {
 					logger.Log("Failed to reload config: %v", err)
 				}
 
-				// Refresh apps list to show updated keybinding
-				av.loadAllApps()
+				// Refresh apps list to show updated keybinding (filtered by current category)
+				av.LoadApps(av.controller.GetFilteredApps())
 
 				// Restore selection if still valid
 				if currentIndex >= 0 && currentIndex < len(av.apps) {
